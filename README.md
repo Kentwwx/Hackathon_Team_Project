@@ -1,2 +1,24 @@
-# Hackathon_Team_Project
-This repository is for Hackathon contest team"写代码的好兄弟们”.
+技术栈：
+
+项目亮点：
+
+项目概述：一个最初的下订单系统，加上六次优化。
+
+最初版本：普通的下订单系统，前端下订单，request发送到唯一的tomcat，然后从mysql取数据，返回response。包括两次md5检验，jsr303参数校验，分布式session，系统通用异常处理。
+
+第一次优化：再最初版本之上加了redis缓存
+
+第二次优化：加上商品页面缓存，热点数据对象缓存，商品详情静态化，订单详情静态化，静态资源优化
+
+第三次优化：使用rabbitmq，并且是redis预减库存
+
+第四次优化：图形验证码以及恶意防刷（接口限流）
+
+第五次优化：tomact 服务端优化，tomcat使用apr连接器，nginx+keepalive，负载均衡
+
+第六次优化：lvs四层负载均衡。
+
+
+
+
+
