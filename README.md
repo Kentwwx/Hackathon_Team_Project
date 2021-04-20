@@ -207,6 +207,188 @@ public class GlobalExceptionHandler {
 
 ------
 
+#### 配置Redis
+
+因为我们要把对象储存在Redis当中，而Redis是key value对应的储存方式，所以我们要做对象的序列化与反序列化。对于对象序列化我们选择的是使用fastJson，因为fastjson查看读起来比较友好。代码中的实现：
+
+```java
+	//对象的序列化
+	private <T> String beanToString(T value) {
+		if(value == null) {
+			return null;
+		}
+		Class<?> clazz = value.getClass();
+		if(clazz == int.class || clazz == Integer.class) {
+			 return ""+value;
+		}else if(clazz == String.class) {
+			 return (String)value;
+		}else if(clazz == long.class || clazz == Long.class) {
+			return ""+value;
+		}else {
+			return JSON.toJSONString(value);
+		}
+	}
+	
+	//对象的反序列化
+	@SuppressWarnings("unchecked")
+	private <T> T stringToBean(String str, Class<T> clazz) {
+		if(str == null || str.length() <= 0 || clazz == null) {
+			 return null;
+		}
+		if(clazz == int.class || clazz == Integer.class) {
+			 return (T)Integer.valueOf(str);
+		}else if(clazz == String.class) {
+			 return (T)str;
+		}else if(clazz == long.class || clazz == Long.class) {
+			return  (T)Long.valueOf(str);
+		}else {
+			return JSON.toJavaObject(JSON.parseObject(str), clazz);
+		}
+	}
+
+```
+
+我们通过在一个统一配置文件列出Redis连接池需要的信息，然后再RedisConfig 类中用“@ConfigurationProperties(prefix="redis")” 这个注解，就把配置文件的信息自动导入到Redis连接池中，方便创建。
+
+
+
+在配置Redis 连接池以后，就可以往Redis里面储存信息了，但在使用过程中我们发现一个问题，Redis的key很容易起名字就重复了，例如我储存user的一个信息，key是id1，但我又储存亚马逊电子书的一个信息，key也是id1。这样的情况就会把user的信息替换掉。所以我们为了彻底解决这个问题，设计了一套Redis key的前缀，避免key的重复。具体结构如下：
+
+##### 接口：KeyPrefix
+
+```java
+public interface KeyPrefix {
+		
+	public int expireSeconds();
+	
+	public String getPrefix();
+	
+}
+
+```
+
+##### 实现KeyPrefix的抽象类：BasePrefix
+
+```java
+public abstract class BasePrefix implements KeyPrefix{
+	
+	private int expireSeconds;
+	
+	private String prefix;
+	
+	public BasePrefix(String prefix) {//0代表永不过期
+		this(0, prefix);
+	}
+	
+	public BasePrefix( int expireSeconds, String prefix) {
+		this.expireSeconds = expireSeconds;
+		this.prefix = prefix;
+	}
+	
+	public int expireSeconds() {//默认0代表永不过期
+		return expireSeconds;
+	}
+
+	public String getPrefix() {
+		String className = getClass().getSimpleName();
+		return className+":" + prefix;
+	}
+
+}
+
+```
+
+
+
+以及我们对代表亚马逊电子书的Goods，代表用户的MiaoshaUser，代表订单的Order，分别继承了BasePrefix 然后实现了各自不同的keyPrefix。具体如下：
+
+##### GoodsKey：
+
+```java
+public class GoodsKey extends BasePrefix{
+
+	private GoodsKey(int expireSeconds, String prefix) {
+		super(expireSeconds, prefix);
+	}
+	public static GoodsKey getGoodsList = new GoodsKey(60, "gl");
+	public static GoodsKey getGoodsDetail = new GoodsKey(60, "gd");
+}
+
+```
+
+##### MiaoshaUserkey:
+
+```java
+public class MiaoshaUserKey extends BasePrefix{
+
+	public static final int TOKEN_EXPIRE = 3600*24 * 2;
+	private MiaoshaUserKey(int expireSeconds, String prefix) {
+		super(expireSeconds, prefix);
+	}
+	public static MiaoshaUserKey token = new MiaoshaUserKey(TOKEN_EXPIRE, "tk");
+	public static MiaoshaUserKey getById = new MiaoshaUserKey(0, "id");
+}
+
+```
+
+##### OrderKey:
+
+```java
+public class OrderKey extends BasePrefix {
+
+	public OrderKey(String prefix) {
+		super(prefix);
+	}
+	public static OrderKey getMiaoshaOrderByUidGid = new OrderKey("moug");
+}
+
+```
+
+所以，当我们使用set方法，把信息存入Redis当中，代码实现是这样的：
+
+```java
+	public <T> boolean set(KeyPrefix prefix, String key,  T value) {
+		 Jedis jedis = null;
+		 try {
+			 jedis =  jedisPool.getResource();
+             //对象序列化
+			 String str = beanToString(value);
+			 if(str == null || str.length() <= 0) {
+				 return false;
+			 }
+			//生成真正的key
+			 String realKey  = prefix.getPrefix() + key;
+			 int seconds =  prefix.expireSeconds();
+			 if(seconds <= 0) {
+				 jedis.set(realKey, str);
+			 }else {
+				 jedis.setex(realKey, seconds, str);
+			 }
+			 return true;
+		 }finally {
+			  returnToPool(jedis);
+		 }
+	}
+```
+
+##### 实际例子：
+
+当我们用Redis set，把一个用户id为1的信息储存到Redis当中
+
+```java
+    	MiaoshaUser user  = new MiaoshaUser();
+    	user.setId(1L);
+    	redisService.set(MiaoshaUserKey.getById, ""+1, user);
+```
+
+
+
+查看Redis的key，发现实际储存的是 "MiaoshaUserKey:id1"。这样就很好的解决了Redis key 冲突的问题了。
+
+![image-20210419234525403](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210419234525403.png)
+
+------
+
 #### 分布式Session
 
 Session可以记录用户的登录状态，是目前主流网页都会用到的。但如果有多个服务器的时候，某一用户的session只储存在其中一个服务器，但他的请求被转发到了另一服务器，这时他的session就不能被准确获取了。所以我们设计了分布式Session的方法来解决这个问题。具体方式是把用户的session信息都储存在Redis缓存当中，这样每次寻找Session都从共用的这唯一的Redis去查找。
