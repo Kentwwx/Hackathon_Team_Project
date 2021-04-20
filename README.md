@@ -1,10 +1,10 @@
 ## 技术栈：
 
- 	1. 前端使用 HTML，CSS，JQuery以及Thymeleaf，Bootstrap技术框架
- 	2. 后端使用SpringBoot 搭建项目，JSR303 做校验器，MyBatis持久层框架
- 	3. 中间件使用了消息队列RabbitMQ进行异步下单，使用Redis进行资源缓存以及实现分布式Session，Druid连接池
-
+1. 前端使用 HTML，CSS，JQuery以及Thymeleaf，Bootstrap技术框架。
+2. 后端使用SpringBoot 搭建项目，JSR303 做校验器，MyBatis持久层框架。
+3. 中间件使用了消息队列RabbitMQ进行异步下单，使用Redis进行资源缓存以及实现分布式Session，Druid连接池。
 4. 使用关系型数据库MySQL。
+
 5. 使用Tomcat服务器集群以及Nginx反向代理和缓存静态资源。
 6. 此外还使用了处于网络层第四次的LVS，实现了Nginx 集群。
 
