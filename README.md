@@ -6,7 +6,7 @@
 4. 使用关系型数据库MySQL。
 
 5. 使用Tomcat服务器集群以及Nginx反向代理和缓存静态资源。
-6. 此外还使用了处于网络层第四次的LVS，实现了Nginx 集群。
+6. 此外还使用了处于网络层第四层的Load Balancer，实现了由Nginx 集群+Tomcat集群组成的Server集群。
 
 
 
