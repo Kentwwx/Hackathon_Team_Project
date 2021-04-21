@@ -385,7 +385,7 @@ public class OrderKey extends BasePrefix {
 
 查看Redis的key，发现实际储存的是 "MiaoshaUserKey:id1"。这样就很好的解决了Redis key 冲突的问题了。
 
-![image-20210419234525403](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210419234525403.png)
+![image-20210419234525403](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419234525403.png)
 
 ------
 
@@ -1153,7 +1153,7 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 （图片为AWS提供的第四层 负载均衡器）
 
-![image-20210421170719488](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210421170719488.png)
+![image-20210421170719488](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210421170719488.png)
 
 因为预算有限的原因，我们只建立了两个EC2 作为我们的Real Server，每个上面都运行着一个Nginx 和两个Tomcat，并且每个Nginx配置两个Tomcat。
 
