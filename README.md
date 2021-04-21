@@ -169,7 +169,7 @@ public class ValidatorUtil {
 
 我们在Exception Handler中截取了Exception的信息，并把核心报错内容作为跳窗，提示给用户：
 
-![image-20210419150910505](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210419150910505.png)
+![image-20210419150910505](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419150910505.png)
 
 
 
