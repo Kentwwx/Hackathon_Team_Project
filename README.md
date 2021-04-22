@@ -738,7 +738,7 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 ## 测试：
 
-![image-20210422183835805](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210422183835805.png)
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/8bca01957c81888d330fd6cee8ae4ba.png)
 
 ## 其他细节：
 
