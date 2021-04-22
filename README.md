@@ -484,7 +484,9 @@ JAVA_OPTS="-server -Xms2048M -Xmx2048M  -XX:+HeapDumpOnOutOfMemoryError -XX:Heap
 
 ##### 2) HTTP Connector 并发优化
 
-除此之外，我们阅读了Tomcat官方的一些文档，查看Tomact是否有其他对于像秒杀这种高并发场景优化的空间。在阅读Tomcat中的 webapp/docs/config 目录下的 The HTTP Connector 文档时（官方文档连接：https://tomcat.apache.org/tomcat-8.5-doc/config/http.html），我们找出来了几个影响性能的参数，并对其初始值进行调整。以下这四个参数我们在 tomact/conf/server.xml 中修改。
+除此之外，我们阅读了Tomcat官方的一些文档，查看Tomact是否有其他对于像秒杀这种高并发场景优化的空间。在阅读Tomcat中的 webapp/docs/config 目录下的 The HTTP Connector 文档时
+官方文档连接：https://tomcat.apache.org/tomcat-8.5-doc/config/http.html
+我们找出来了几个影响性能的参数，并对其初始值进行调整。以下这四个参数我们在 tomact/conf/server.xml 中修改。
 
 1. **maxConnections** 这个配置默认值是10000，代表最高支持一万个连接。
 2. **acceptCount** 这个值默认是100，代表在所有线程都被占用的情况下，请求等待队列的长度。
