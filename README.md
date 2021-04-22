@@ -746,11 +746,11 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 我们将第一次原始版本没有任何优化的代码部署到我们亚马逊云的Tomcat上之后，我们用jmeter做了一组5000个用户轮回10次的压力测试。这次只测试GET方法，测的具体的是/goods/to_list 页面，调取页面货物信息。
 
-![image-20210422183835805]()
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/jmeter%E4%B8%80%E6%AC%A1.png)
 
 下面是Jmeter 压力测试得出来的聚合报告。因为服务器是在AWS上的美国弗吉尼亚站点，而我们发出的request请求是在中国北方，因为网络原因测试数据会有一些error率（我们在localhost进行多次测试，Error率始终为0），以及因为网络原因QPS，也就是图片中的QPS较低，只有485。
 
-![image-20210422183835805]()
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6%8D%AE.png)
 
 
 
