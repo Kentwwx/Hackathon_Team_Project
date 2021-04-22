@@ -754,6 +754,22 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 
 
+### 二次测试 优化Tomcat：
+
+我们在最初测试和最终测试之间增加了一次测试，这次测试是用最原始的代码，但是优化了Tomcat的配置参数，以及使用了APR连接。
+
+这次与第一次测试不同，我们测试的不再是第一次的GET 电子书列表，而是测试Miaosha 这个功能。我们首先生成了5000个用户Token，并设置5000个用户循环十次，访问秒杀功能，最终效果如下：
+
+
+
+测试配置：
+
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6%8D%AE.png)
+
+测试结果：
+
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6%8D%AE.png)
+
 
 
 ## 其他细节：
