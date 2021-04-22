@@ -15,9 +15,7 @@
 
 ## 项目概述：
 
-亚马逊作为全球性企业，有着庞大的用户群。亚马逊在进行秒杀Kindle电子书活动时，势必会面临着超高的并发量。我们为了满足这一需求，从最初的普通的Kindle电子书秒杀系统，进行了6次优化，最终，我们的项目达到了理论上可以支撑百万并发连接级别连接的系统架构。运用先进的技术理念，增加系统的可靠性，提高在高并发场景下的QPS，增加用户体验，实现接近实际场景下的亚马逊电子书促销秒杀系统。
-
-
+亚马逊作为全球性企业，有着庞大的用户群。亚马逊在进行秒杀Kindle电子书活动时，势必会面临着超高的并发量。我们为了满足这一需求，从最初的普通的Kindle电子书秒杀系统，进行了6次优化，最终，我们的项目达到了理论上可以支撑百万并发连接级别连接的系统架构。运用先进的技术理念，增加系统的可靠性，提高在高并发场景下的QPS，增加用户体验，实现接近实际场景下的秒杀系统。
 
 ## 版本介绍：
 
@@ -28,426 +26,6 @@
 我们实现了三个页面，分别是登录页面，亚马逊电子书列表页面，以及秒杀页面。
 
 用户通过在秒杀页面点击秒杀按钮下订单，request发送到Tomcat 服务器，根据我们代码的逻辑，服务器从Mysql取数据，返回页面。
-
-我们考虑到需要保护用户信息，而进行了MD5加密，具体方法如下：
-
-------
-
-#### 为保护用户数据，使用两次MD5加密
-
-因为数据在网络上是明文传输，如果被劫包，用户的明文密码就会被截取。第一次MD5是用户在输入密码时候之后加上，是为了防止用户密码在网络上明文传输。**方式为：MD5（用户输入+固定salt）**。
-
-第二次MD5是在载入数据库之前加上，为了防止数据库被盗，有人通过反查表对只进行一次MD5的数据进行破解，所以进行两次MD5双重保险。**方式为：MD5（上次的结果+随机salt）**
-
-```java
-	public static String md5(String src) {
-		return DigestUtils.md5Hex(src);
-	}
-	//固定的盐
-	private static final String salt = "1a2b3c4d";
-
-	//加salt后进行第一次MD5
-	public static String inputPassToFormPass(String inputPass) {
-		String str = ""+salt.charAt(0)+salt.charAt(2) + inputPass +salt.charAt(5) + salt.charAt(4);
-		System.out.println(str);
-		return md5(str);
-	}
-
-	//载入数据库之前，对数据再加上一个随机的盐，然后进行第二次MD5
-	public static String formPassToDBPass(String formPass, String salt) {
-		String str = ""+salt.charAt(0)+salt.charAt(2) + formPass +salt.charAt(5) + salt.charAt(4);
-		return md5(str);
-	}
-```
-
-##### **举例：**
-
-用户输入密码为：**123456**
-
-在网络传输的是：**d3b1294a61a07da9b49b6e22b2cbd7f9**
-
-使用随机salt为 "5e6f7g8h" ，则载入数据库的是：**bcb03326aab1575265da58be91b24382**
-
-用户信息得以保护。
-
-------
-
-#### JSR303校验器
-
-我门使用JSR303 对用户输入的数据进行校验，并实现了Exception Handler 给用户提示输入错误等信息
-
-用Jsr303 注释 ”**@NotNull**" 进行输入内容非空的检验。并自定义了一个“**@IsMobile**”的注释进行输入检验。
-
-代码如下：
-
-手机号格式检验：不能为空或者非法手机号格式
-
-```java
-/**
- * 自定义一个 @IsMobile 的手机号码检测注释
- * */
-@Target({ METHOD, FIELD, ANNOTATION_TYPE, CONSTRUCTOR, PARAMETER })
-@Retention(RUNTIME)
-@Documented
-//使用IsMobileValidator 这个类去做验证
-@Constraint(validatedBy = {IsMobileValidator.class })
-public @interface  IsMobile {
-	
-	boolean required() default true;
-	
-	String message() default "手机号码格式错误";
-
-	Class<?>[] groups() default { };
-
-	Class<? extends Payload>[] payload() default { };
-}
-```
-
-```java
-/**
- * 实现必要的ConstraintValidato 接口
- * */
-public class IsMobileValidator implements ConstraintValidator<IsMobile, String> {
-
-	private boolean required = false;
-	
-	public void initialize(IsMobile constraintAnnotation) {
-		required = constraintAnnotation.required();
-	}
-
-	public boolean isValid(String value, ConstraintValidatorContext context) {
-		if(required) {
-            //调用validatorUtil 类去对手机号码进行校验
-			return ValidatorUtil.isMobile(value);
-		}else {
-			if(StringUtils.isEmpty(value)) {
-				return true;
-			}else {
-				return ValidatorUtil.isMobile(value);
-			}
-		}
-	}
-
-}
-```
-
-```java
-/**
- * 用于实现对手机号格式的检测
- * */
-public class ValidatorUtil {
-	//用regex去判断是否符合手机号码的形式：以1开头的11位数字
-	private static final Pattern mobile_pattern = Pattern.compile("1\\d{10}");
-	
-	public static boolean isMobile(String src) {
-        //判断是否为空
-		if(StringUtils.isEmpty(src)) {
-			return false;
-		}
-        //判断是否为手机号码的格式
-		Matcher m = mobile_pattern.matcher(src);
-		return m.matches();
-	}
-```
-
-#### 异常处理
-
-在实现这个注释校验器之后，检测手机号输入格式不再需要各种判断条件，只需要一个简单的 **@IsMobile** 注释就可以了。但是，当输入值没有办法通过校验,则会返回exceptions。 这种Exceptions阅读不友好，所以我们又定义了一个Exception Handler去解决这个问题。
-
-##### 使用Exception Handler之前：
-
-当用户在登录界面输入错误格式的手机号，不会在界面有任何提示，只会在response中返回以下的错误信息，十分的阅读不友好：
-
-```json
-{"timestamp":1618815791860,"status":400,"error":"Bad Request","exception":"org.springframework.validation.BindException","errors":[{"codes":["IsMobile.loginVo.mobile","IsMobile.mobile","IsMobile.java.lang.String","IsMobile"],"arguments":[{"codes":["loginVo.mobile","mobile"],"arguments":null,"defaultMessage":"mobile","code":"mobile"},true],"defaultMessage":"手机号码格式错误","objectName":"loginVo","field":"mobile","rejectedValue":"23333332222","bindingFailure":false,"code":"IsMobile"}],"message":"Validation failed for object='loginVo'. Error count: 1","path":"/login/do_login"}
-```
-
-
-
-##### 以下为实现Exception Handler之后：
-
-我们在Exception Handler中截取了Exception的信息，并把核心报错内容作为跳窗，提示给用户：
-
-![image-20210419150910505](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419150910505.png)
-
-
-
-##### 以下为Exception Handler的具体实现：
-
-这个类截取了Exception，并返回用我们自己定义的**Result.error** 方法所包装的错误信息，更加简明扼要。
-
-```java
-@ControllerAdvice
-@ResponseBody
-public class GlobalExceptionHandler {
-	@ExceptionHandler(value=Exception.class)
-	public Result<String> exceptionHandler(HttpServletRequest request, Exception e){
-		e.printStackTrace();
-        
-        //GlobalException是我们自己定义的Exception 类，包含我们自定义的一些错误message，比如密码错误，手机号不存在等
-		if(e instanceof GlobalException) {
-			GlobalException ex = (GlobalException)e;
-			return Result.error(ex.getCm());
-            
-            //BindException 处理参数校验异常
-		}else if(e instanceof BindException) {
-			BindException ex = (BindException)e;
-			List<ObjectError> errors = ex.getAllErrors();
-			ObjectError error = errors.get(0);
-			String msg = error.getDefaultMessage();
-			return Result.error(CodeMsg.BIND_ERROR.fillArgs(msg));
-		}else {
-            //其余为服务器异常
-			return Result.error(CodeMsg.SERVER_ERROR);
-		}
-	}
-}
-```
-
-------
-
-#### 配置Redis
-
-因为我们要把对象储存在Redis当中，而Redis是key value对应的储存方式，所以我们要做对象的序列化与反序列化。对于对象序列化我们选择的是使用fastJson，因为fastjson查看读起来比较友好。代码中的实现：
-
-```java
-	//对象的序列化
-	private <T> String beanToString(T value) {
-		if(value == null) {
-			return null;
-		}
-		Class<?> clazz = value.getClass();
-		if(clazz == int.class || clazz == Integer.class) {
-			 return ""+value;
-		}else if(clazz == String.class) {
-			 return (String)value;
-		}else if(clazz == long.class || clazz == Long.class) {
-			return ""+value;
-		}else {
-			return JSON.toJSONString(value);
-		}
-	}
-	
-	//对象的反序列化
-	@SuppressWarnings("unchecked")
-	private <T> T stringToBean(String str, Class<T> clazz) {
-		if(str == null || str.length() <= 0 || clazz == null) {
-			 return null;
-		}
-		if(clazz == int.class || clazz == Integer.class) {
-			 return (T)Integer.valueOf(str);
-		}else if(clazz == String.class) {
-			 return (T)str;
-		}else if(clazz == long.class || clazz == Long.class) {
-			return  (T)Long.valueOf(str);
-		}else {
-			return JSON.toJavaObject(JSON.parseObject(str), clazz);
-		}
-	}
-
-```
-
-我们通过在一个统一配置文件列出Redis连接池需要的信息，然后再RedisConfig 类中用“@ConfigurationProperties(prefix="redis")” 这个注解，就把配置文件的信息自动导入到Redis连接池中，方便创建。
-
-
-
-在配置Redis 连接池以后，就可以往Redis里面储存信息了，但在使用过程中我们发现一个问题，Redis的key很容易起名字就重复了，例如我储存user的一个信息，key是id1，但我又储存亚马逊电子书的一个信息，key也是id1。这样的情况就会把user的信息替换掉。所以我们为了彻底解决这个问题，设计了一套Redis key的前缀，避免key的重复。具体结构如下：
-
-##### 接口：KeyPrefix
-
-```java
-public interface KeyPrefix {
-		
-	public int expireSeconds();
-	
-	public String getPrefix();
-	
-}
-
-```
-
-##### 实现KeyPrefix的抽象类：BasePrefix
-
-```java
-public abstract class BasePrefix implements KeyPrefix{
-	
-	private int expireSeconds;
-	
-	private String prefix;
-	
-	public BasePrefix(String prefix) {//0代表永不过期
-		this(0, prefix);
-	}
-	
-	public BasePrefix( int expireSeconds, String prefix) {
-		this.expireSeconds = expireSeconds;
-		this.prefix = prefix;
-	}
-	
-	public int expireSeconds() {//默认0代表永不过期
-		return expireSeconds;
-	}
-
-	public String getPrefix() {
-		String className = getClass().getSimpleName();
-		return className+":" + prefix;
-	}
-
-}
-
-```
-
-
-
-以及我们对代表亚马逊电子书的Goods，代表用户的MiaoshaUser，代表订单的Order，分别继承了BasePrefix 然后实现了各自不同的keyPrefix。具体如下：
-
-##### GoodsKey：
-
-```java
-public class GoodsKey extends BasePrefix{
-
-	private GoodsKey(int expireSeconds, String prefix) {
-		super(expireSeconds, prefix);
-	}
-	public static GoodsKey getGoodsList = new GoodsKey(60, "gl");
-	public static GoodsKey getGoodsDetail = new GoodsKey(60, "gd");
-}
-
-```
-
-##### MiaoshaUserkey:
-
-```java
-public class MiaoshaUserKey extends BasePrefix{
-
-	public static final int TOKEN_EXPIRE = 3600*24 * 2;
-	private MiaoshaUserKey(int expireSeconds, String prefix) {
-		super(expireSeconds, prefix);
-	}
-	public static MiaoshaUserKey token = new MiaoshaUserKey(TOKEN_EXPIRE, "tk");
-	public static MiaoshaUserKey getById = new MiaoshaUserKey(0, "id");
-}
-
-```
-
-##### OrderKey:
-
-```java
-public class OrderKey extends BasePrefix {
-
-	public OrderKey(String prefix) {
-		super(prefix);
-	}
-	public static OrderKey getMiaoshaOrderByUidGid = new OrderKey("moug");
-}
-
-```
-
-所以，当我们使用set方法，把信息存入Redis当中，代码实现是这样的：
-
-```java
-	public <T> boolean set(KeyPrefix prefix, String key,  T value) {
-		 Jedis jedis = null;
-		 try {
-			 jedis =  jedisPool.getResource();
-             //对象序列化
-			 String str = beanToString(value);
-			 if(str == null || str.length() <= 0) {
-				 return false;
-			 }
-			//生成真正的key
-			 String realKey  = prefix.getPrefix() + key;
-			 int seconds =  prefix.expireSeconds();
-			 if(seconds <= 0) {
-				 jedis.set(realKey, str);
-			 }else {
-				 jedis.setex(realKey, seconds, str);
-			 }
-			 return true;
-		 }finally {
-			  returnToPool(jedis);
-		 }
-	}
-```
-
-##### 实际例子：
-
-当我们用Redis set，把一个用户id为1的信息储存到Redis当中
-
-```java
-    	MiaoshaUser user  = new MiaoshaUser();
-    	user.setId(1L);
-    	redisService.set(MiaoshaUserKey.getById, ""+1, user);
-```
-
-
-
-查看Redis的key，发现实际储存的是 "MiaoshaUserKey:id1"。这样就很好的解决了Redis key 冲突的问题了。
-
-![image-20210419234525403](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419234525403.png)
-
-------
-
-#### 分布式Session
-
-Session可以记录用户的登录状态，是目前主流网页都会用到的。但如果有多个服务器的时候，某一用户的session只储存在其中一个服务器，但他的请求被转发到了另一服务器，这时他的session就不能被准确获取了。所以我们设计了分布式Session的方法来解决这个问题。具体方式是把用户的session信息都储存在Redis缓存当中，这样每次寻找Session都从共用的这唯一的Redis去查找。
-
-我们首先在User Service类中实现了一个addCookie 方法，代码如下：
-
-```java
-	private void addCookie(HttpServletResponse response, String token, MiaoshaUser user) {
-        //把token作为key，user的信息作为值存入Redis当中
-		redisService.set(MiaoshaUserKey.token, token, user);
-        
-		Cookie cookie = new Cookie(COOKI_NAME_TOKEN, token);
-        //Cookie的expire时间和在redis当中对应的key的expire时间相同
-		cookie.setMaxAge(MiaoshaUserKey.token.expireSeconds());
-		cookie.setPath("/");
-        //把带有token的Cookie加在response当中
-		response.addCookie(cookie);
-	}
-
-```
-
-addCookie方法在login方法中被调用，随着用户登录，用户拿到带有token的Cookie，下次进入页面时，系统会先从Redis查找有无token，如果有，则返回此用户信息，并刷新Session存在时间。代码如下：
-
-```java
-	public MiaoshaUser getByToken(HttpServletResponse response, String token) {
-		if(StringUtils.isEmpty(token)) {
-			return null;
-		}
-		MiaoshaUser user = redisService.get(MiaoshaUserKey.token, token, MiaoshaUser.class);
-		//延长有效期
-		if(user != null) {
-			addCookie(response, token, user);
-		}
-		return user;
-	}
-```
-
-我们实现了一个Argument Resolver类，并在resolve Argument方法中，做了判断有没有这个用户Session的事情。这样的结构先解析Argument，再传入controller，就可以使不同的页面都有判断Session是否存在的功能，但代码写一遍就够了，就可以使代码更简洁。resolve Argument方法实现如下：
-
-```java
-	public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
-			NativeWebRequest webRequest, WebDataBinderFactory binderFactory) throws Exception {
-        //拿到Request和Response
-		HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
-		HttpServletResponse response = webRequest.getNativeResponse(HttpServletResponse.class);
-		//Token也许存在parameter里，也许存在cookie里
-		String paramToken = request.getParameter(MiaoshaUserService.COOKI_NAME_TOKEN);
-		String cookieToken = getCookieValue(request, MiaoshaUserService.COOKI_NAME_TOKEN);
-        
-		if(StringUtils.isEmpty(cookieToken) && StringUtils.isEmpty(paramToken)) {
-			return null;
-		}
-        //如果有token，则返回这个Session的用户信息
-		String token = StringUtils.isEmpty(paramToken)?cookieToken:paramToken;
-		return userService.getByToken(response, token);
-	}
-
-```
-
-------
 
 #### 秒杀功能的初步实现
 
@@ -1158,5 +736,423 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 在这样的系统架构之下，在服务器充足的情况下，是可以支持百万级别的并发连接。
 
+## 测试：
 
+![image-20210422183835805](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210422183835805.png)
+
+## 其他细节：
+
+#### 为保护用户数据，使用两次MD5加密
+
+因为数据在网络上是明文传输，如果被劫包，用户的明文密码就会被截取。第一次MD5是用户在输入密码时候之后加上，是为了防止用户密码在网络上明文传输。**方式为：MD5（用户输入+固定salt）**。
+
+第二次MD5是在载入数据库之前加上，为了防止数据库被盗，有人通过反查表对只进行一次MD5的数据进行破解，所以进行两次MD5双重保险。**方式为：MD5（上次的结果+随机salt）**
+
+```java
+	public static String md5(String src) {
+		return DigestUtils.md5Hex(src);
+	}
+	//固定的盐
+	private static final String salt = "1a2b3c4d";
+
+	//加salt后进行第一次MD5
+	public static String inputPassToFormPass(String inputPass) {
+		String str = ""+salt.charAt(0)+salt.charAt(2) + inputPass +salt.charAt(5) + salt.charAt(4);
+		System.out.println(str);
+		return md5(str);
+	}
+
+	//载入数据库之前，对数据再加上一个随机的盐，然后进行第二次MD5
+	public static String formPassToDBPass(String formPass, String salt) {
+		String str = ""+salt.charAt(0)+salt.charAt(2) + formPass +salt.charAt(5) + salt.charAt(4);
+		return md5(str);
+	}
+```
+
+##### **举例：**
+
+用户输入密码为：**123456**
+
+在网络传输的是：**d3b1294a61a07da9b49b6e22b2cbd7f9**
+
+使用随机salt为 "5e6f7g8h" ，则载入数据库的是：**bcb03326aab1575265da58be91b24382**
+
+用户信息得以保护。
+
+------
+
+#### JSR303校验器
+
+我门使用JSR303 对用户输入的数据进行校验，并实现了Exception Handler 给用户提示输入错误等信息
+
+用Jsr303 注释 ”**@NotNull**" 进行输入内容非空的检验。并自定义了一个“**@IsMobile**”的注释进行输入检验。
+
+代码如下：
+
+手机号格式检验：不能为空或者非法手机号格式
+
+```java
+/**
+ * 自定义一个 @IsMobile 的手机号码检测注释
+ * */
+@Target({ METHOD, FIELD, ANNOTATION_TYPE, CONSTRUCTOR, PARAMETER })
+@Retention(RUNTIME)
+@Documented
+//使用IsMobileValidator 这个类去做验证
+@Constraint(validatedBy = {IsMobileValidator.class })
+public @interface  IsMobile {
+	
+	boolean required() default true;
+	
+	String message() default "手机号码格式错误";
+
+	Class<?>[] groups() default { };
+
+	Class<? extends Payload>[] payload() default { };
+}
+```
+
+```java
+/**
+ * 实现必要的ConstraintValidato 接口
+ * */
+public class IsMobileValidator implements ConstraintValidator<IsMobile, String> {
+
+	private boolean required = false;
+	
+	public void initialize(IsMobile constraintAnnotation) {
+		required = constraintAnnotation.required();
+	}
+
+	public boolean isValid(String value, ConstraintValidatorContext context) {
+		if(required) {
+            //调用validatorUtil 类去对手机号码进行校验
+			return ValidatorUtil.isMobile(value);
+		}else {
+			if(StringUtils.isEmpty(value)) {
+				return true;
+			}else {
+				return ValidatorUtil.isMobile(value);
+			}
+		}
+	}
+
+}
+```
+
+```java
+/**
+ * 用于实现对手机号格式的检测
+ * */
+public class ValidatorUtil {
+	//用regex去判断是否符合手机号码的形式：以1开头的11位数字
+	private static final Pattern mobile_pattern = Pattern.compile("1\\d{10}");
+	
+	public static boolean isMobile(String src) {
+        //判断是否为空
+		if(StringUtils.isEmpty(src)) {
+			return false;
+		}
+        //判断是否为手机号码的格式
+		Matcher m = mobile_pattern.matcher(src);
+		return m.matches();
+	}
+```
+
+#### 异常处理
+
+在实现这个注释校验器之后，检测手机号输入格式不再需要各种判断条件，只需要一个简单的 **@IsMobile** 注释就可以了。但是，当输入值没有办法通过校验,则会返回exceptions。 这种Exceptions阅读不友好，所以我们又定义了一个Exception Handler去解决这个问题。
+
+##### 使用Exception Handler之前：
+
+当用户在登录界面输入错误格式的手机号，不会在界面有任何提示，只会在response中返回以下的错误信息，十分的阅读不友好：
+
+```json
+{"timestamp":1618815791860,"status":400,"error":"Bad Request","exception":"org.springframework.validation.BindException","errors":[{"codes":["IsMobile.loginVo.mobile","IsMobile.mobile","IsMobile.java.lang.String","IsMobile"],"arguments":[{"codes":["loginVo.mobile","mobile"],"arguments":null,"defaultMessage":"mobile","code":"mobile"},true],"defaultMessage":"手机号码格式错误","objectName":"loginVo","field":"mobile","rejectedValue":"23333332222","bindingFailure":false,"code":"IsMobile"}],"message":"Validation failed for object='loginVo'. Error count: 1","path":"/login/do_login"}
+```
+
+
+
+##### 以下为实现Exception Handler之后：
+
+我们在Exception Handler中截取了Exception的信息，并把核心报错内容作为跳窗，提示给用户：
+
+![image-20210419150910505](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419150910505.png)
+
+
+
+##### 以下为Exception Handler的具体实现：
+
+这个类截取了Exception，并返回用我们自己定义的**Result.error** 方法所包装的错误信息，更加简明扼要。
+
+```java
+@ControllerAdvice
+@ResponseBody
+public class GlobalExceptionHandler {
+	@ExceptionHandler(value=Exception.class)
+	public Result<String> exceptionHandler(HttpServletRequest request, Exception e){
+		e.printStackTrace();
+        
+        //GlobalException是我们自己定义的Exception 类，包含我们自定义的一些错误message，比如密码错误，手机号不存在等
+		if(e instanceof GlobalException) {
+			GlobalException ex = (GlobalException)e;
+			return Result.error(ex.getCm());
+            
+            //BindException 处理参数校验异常
+		}else if(e instanceof BindException) {
+			BindException ex = (BindException)e;
+			List<ObjectError> errors = ex.getAllErrors();
+			ObjectError error = errors.get(0);
+			String msg = error.getDefaultMessage();
+			return Result.error(CodeMsg.BIND_ERROR.fillArgs(msg));
+		}else {
+            //其余为服务器异常
+			return Result.error(CodeMsg.SERVER_ERROR);
+		}
+	}
+}
+```
+
+------
+
+#### 配置Redis
+
+因为我们要把对象储存在Redis当中，而Redis是key value对应的储存方式，所以我们要做对象的序列化与反序列化。对于对象序列化我们选择的是使用fastJson，因为fastjson查看读起来比较友好。代码中的实现：
+
+```java
+	//对象的序列化
+	private <T> String beanToString(T value) {
+		if(value == null) {
+			return null;
+		}
+		Class<?> clazz = value.getClass();
+		if(clazz == int.class || clazz == Integer.class) {
+			 return ""+value;
+		}else if(clazz == String.class) {
+			 return (String)value;
+		}else if(clazz == long.class || clazz == Long.class) {
+			return ""+value;
+		}else {
+			return JSON.toJSONString(value);
+		}
+	}
+	
+	//对象的反序列化
+	@SuppressWarnings("unchecked")
+	private <T> T stringToBean(String str, Class<T> clazz) {
+		if(str == null || str.length() <= 0 || clazz == null) {
+			 return null;
+		}
+		if(clazz == int.class || clazz == Integer.class) {
+			 return (T)Integer.valueOf(str);
+		}else if(clazz == String.class) {
+			 return (T)str;
+		}else if(clazz == long.class || clazz == Long.class) {
+			return  (T)Long.valueOf(str);
+		}else {
+			return JSON.toJavaObject(JSON.parseObject(str), clazz);
+		}
+	}
+
+```
+
+我们通过在一个统一配置文件列出Redis连接池需要的信息，然后再RedisConfig 类中用“@ConfigurationProperties(prefix="redis")” 这个注解，就把配置文件的信息自动导入到Redis连接池中，方便创建。
+
+
+
+在配置Redis 连接池以后，就可以往Redis里面储存信息了，但在使用过程中我们发现一个问题，Redis的key很容易起名字就重复了，例如我储存user的一个信息，key是id1，但我又储存亚马逊电子书的一个信息，key也是id1。这样的情况就会把user的信息替换掉。所以我们为了彻底解决这个问题，设计了一套Redis key的前缀，避免key的重复。具体结构如下：
+
+##### 接口：KeyPrefix
+
+```java
+public interface KeyPrefix {
+		
+	public int expireSeconds();
+	
+	public String getPrefix();
+	
+}
+
+```
+
+##### 实现KeyPrefix的抽象类：BasePrefix
+
+```java
+public abstract class BasePrefix implements KeyPrefix{
+	
+	private int expireSeconds;
+	
+	private String prefix;
+	
+	public BasePrefix(String prefix) {//0代表永不过期
+		this(0, prefix);
+	}
+	
+	public BasePrefix( int expireSeconds, String prefix) {
+		this.expireSeconds = expireSeconds;
+		this.prefix = prefix;
+	}
+	
+	public int expireSeconds() {//默认0代表永不过期
+		return expireSeconds;
+	}
+
+	public String getPrefix() {
+		String className = getClass().getSimpleName();
+		return className+":" + prefix;
+	}
+
+}
+
+```
+
+
+
+以及我们对代表亚马逊电子书的Goods，代表用户的MiaoshaUser，代表订单的Order，分别继承了BasePrefix 然后实现了各自不同的keyPrefix。具体如下：
+
+##### GoodsKey：
+
+```java
+public class GoodsKey extends BasePrefix{
+
+	private GoodsKey(int expireSeconds, String prefix) {
+		super(expireSeconds, prefix);
+	}
+	public static GoodsKey getGoodsList = new GoodsKey(60, "gl");
+	public static GoodsKey getGoodsDetail = new GoodsKey(60, "gd");
+}
+
+```
+
+##### MiaoshaUserkey:
+
+```java
+public class MiaoshaUserKey extends BasePrefix{
+
+	public static final int TOKEN_EXPIRE = 3600*24 * 2;
+	private MiaoshaUserKey(int expireSeconds, String prefix) {
+		super(expireSeconds, prefix);
+	}
+	public static MiaoshaUserKey token = new MiaoshaUserKey(TOKEN_EXPIRE, "tk");
+	public static MiaoshaUserKey getById = new MiaoshaUserKey(0, "id");
+}
+
+```
+
+##### OrderKey:
+
+```java
+public class OrderKey extends BasePrefix {
+
+	public OrderKey(String prefix) {
+		super(prefix);
+	}
+	public static OrderKey getMiaoshaOrderByUidGid = new OrderKey("moug");
+}
+
+```
+
+所以，当我们使用set方法，把信息存入Redis当中，代码实现是这样的：
+
+```java
+	public <T> boolean set(KeyPrefix prefix, String key,  T value) {
+		 Jedis jedis = null;
+		 try {
+			 jedis =  jedisPool.getResource();
+             //对象序列化
+			 String str = beanToString(value);
+			 if(str == null || str.length() <= 0) {
+				 return false;
+			 }
+			//生成真正的key
+			 String realKey  = prefix.getPrefix() + key;
+			 int seconds =  prefix.expireSeconds();
+			 if(seconds <= 0) {
+				 jedis.set(realKey, str);
+			 }else {
+				 jedis.setex(realKey, seconds, str);
+			 }
+			 return true;
+		 }finally {
+			  returnToPool(jedis);
+		 }
+	}
+```
+
+##### 实际例子：
+
+当我们用Redis set，把一个用户id为1的信息储存到Redis当中
+
+```java
+    	MiaoshaUser user  = new MiaoshaUser();
+    	user.setId(1L);
+    	redisService.set(MiaoshaUserKey.getById, ""+1, user);
+```
+
+
+
+查看Redis的key，发现实际储存的是 "MiaoshaUserKey:id1"。这样就很好的解决了Redis key 冲突的问题了。
+
+![image-20210419234525403](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419234525403.png)
+
+------
+
+#### 分布式Session
+
+Session可以记录用户的登录状态，是目前主流网页都会用到的。但如果有多个服务器的时候，某一用户的session只储存在其中一个服务器，但他的请求被转发到了另一服务器，这时他的session就不能被准确获取了。所以我们设计了分布式Session的方法来解决这个问题。具体方式是把用户的session信息都储存在Redis缓存当中，这样每次寻找Session都从共用的这唯一的Redis去查找。
+
+我们首先在User Service类中实现了一个addCookie 方法，代码如下：
+
+```java
+	private void addCookie(HttpServletResponse response, String token, MiaoshaUser user) {
+        //把token作为key，user的信息作为值存入Redis当中
+		redisService.set(MiaoshaUserKey.token, token, user);
+        
+		Cookie cookie = new Cookie(COOKI_NAME_TOKEN, token);
+        //Cookie的expire时间和在redis当中对应的key的expire时间相同
+		cookie.setMaxAge(MiaoshaUserKey.token.expireSeconds());
+		cookie.setPath("/");
+        //把带有token的Cookie加在response当中
+		response.addCookie(cookie);
+	}
+
+```
+
+addCookie方法在login方法中被调用，随着用户登录，用户拿到带有token的Cookie，下次进入页面时，系统会先从Redis查找有无token，如果有，则返回此用户信息，并刷新Session存在时间。代码如下：
+
+```java
+	public MiaoshaUser getByToken(HttpServletResponse response, String token) {
+		if(StringUtils.isEmpty(token)) {
+			return null;
+		}
+		MiaoshaUser user = redisService.get(MiaoshaUserKey.token, token, MiaoshaUser.class);
+		//延长有效期
+		if(user != null) {
+			addCookie(response, token, user);
+		}
+		return user;
+	}
+```
+
+我们实现了一个Argument Resolver类，并在resolve Argument方法中，做了判断有没有这个用户Session的事情。这样的结构先解析Argument，再传入controller，就可以使不同的页面都有判断Session是否存在的功能，但代码写一遍就够了，就可以使代码更简洁。resolve Argument方法实现如下：
+
+```java
+	public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
+			NativeWebRequest webRequest, WebDataBinderFactory binderFactory) throws Exception {
+        //拿到Request和Response
+		HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
+		HttpServletResponse response = webRequest.getNativeResponse(HttpServletResponse.class);
+		//Token也许存在parameter里，也许存在cookie里
+		String paramToken = request.getParameter(MiaoshaUserService.COOKI_NAME_TOKEN);
+		String cookieToken = getCookieValue(request, MiaoshaUserService.COOKI_NAME_TOKEN);
+        
+		if(StringUtils.isEmpty(cookieToken) && StringUtils.isEmpty(paramToken)) {
+			return null;
+		}
+        //如果有token，则返回这个Session的用户信息
+		String token = StringUtils.isEmpty(paramToken)?cookieToken:paramToken;
+		return userService.getByToken(response, token);
+	}
+
+```
 
