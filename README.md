@@ -7,11 +7,17 @@
 5. 使用Tomcat服务器集群以及Nginx反向代理和缓存静态资源。
 6. 此外还使用了处于网络层第四层的Load Balancer，实现了由Nginx 集群+Tomcat集群组成的Server集群。
 
-
-
 ## 项目亮点：
 
+**系统架构完整：**使用由Nginx 集群和Tomcat集群组成的Server集群，并使用由AWS提供的处于OSI第四层网络的Load Balancer。
 
+**中间件：**使用Redis 缓存实现分布式Session，以及页面和热点数据静态化。使用消息队列RabbitMQ削峰填谷。
+
+**用户数据方面：**使用JSR303校验器对用户名进行检验，两次MD5对用户密码进行保护
+
+**高并发场景下保证电子书不超卖：**1.前端加验证码，防止用户同时发出多个请求。2.隐藏秒杀地址，防止用户提前抓取网页。3.在订单表中，对用户id和电子书id加唯一索引，确保一个用户不会生成两个订单。4.在减库存的sql 语句加上对数据库数量的判断。
+
+**其他**：图形验证码以及接口限流防刷等。
 
 ## 项目概述：
 
@@ -760,15 +766,17 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 这次与第一次测试不同，我们测试的不再是第一次的GET 电子书列表，而是测试Miaosha 这个功能。我们首先生成了5000个用户Token，并设置5000个用户循环十次，访问秒杀功能，最终效果如下：
 
-
-
 测试配置：
 
-![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6%8D%AE.png)
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/token.png)
+
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/token%E9%85%8D%E7%BD%AE.png)
 
 测试结果：
 
-![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6%8D%AE.png)
+可以看到，吞吐量达到了1110以上，尽管秒杀的操作要比get goods list还要复杂，但是吞吐量确更高了，后续我们不再测试get goods list，我们会测试我们的秒杀功能 连接：/miaosha/do_miaosha。
+
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/%E4%BA%8C%E6%AC%A1.%E4%BC%98%E5%8C%96Tomcat.png)
 
 
 
