@@ -9,7 +9,7 @@
 
 ## 项目亮点：
 
-**系统架构完整**：使用由Nginx 集群和Tomcat集群组成的Server集群，并使用由AWS提供的处于OSI第四层网络的Load Balancer。
+**系统架构完整**：使用由Application Load Balancer 集群和Tomcat集群组成的Server集群，并使用由AWS提供的处于OSI第四层网络的Load Balancer。
 
 **中间件**：使用Redis 缓存实现分布式Session，以及页面和热点数据静态化。使用消息队列RabbitMQ削峰填谷。
 
@@ -523,13 +523,25 @@ Tomcat支持三种请求处理方式，分别是BIO，NIO和APR。BIO是同步�
 
 ### 第五次优化：
 
-#### 使用Nginx
+第五次优化我们先在本地开发时使用的Nginx 配置，以及对高并发的参数优化，在后面有详细介绍。一台Nginx 反向代理两台Tomcat。总共有两台Nginx。但在部署在AWS时，我们发现AWS 提供了Application layer Load Balancer（ALB），可以代替Nginx的主要功能，所以在实际部署时我们使用了AWS 提供的ALB。
+
+#### Application Load Balancer
+
+ALB是应用层负载均衡器，支持HTTP/HTTPS的协议，也支持基于请求路径的分发。我们在服务器上增加一个新的Tomcat，原有的EC2上又增加了一个新的EC2服务器，也同样配置了两个Tomcat。现在，我们总共有两个服务器和四个Tomcat。然后我们在AWS做启动Application Load Balancer(ALB)前的准备工作 ，设置我们的两个EC2为我们的目标集群，在注册实例时，我们在每个EC2上启动两个实例，分别在8080和8090端口。然后，我们创建对HTTP/HTTPS负载均衡器，并创建两个监听器，分别监听在8080和8090端口。然后再进行安全配置。最后使用Route53 DNS解析服务，将相应的域名CNAME到该ALB的域名。
+
+下图中是我们项目用到的负载均衡器，其中红线标出的是我们使用ALB。每个均衡器配置一个Target Group，每个target group 包括两台EC2 实例。
+
+![image-20210423230951657](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423230951657.png)
+
+使用应用负载均衡器基于主机名/路径的流量分发特性，客户可以仅用一组应用负载均衡器就可实现将流量路由给多个后端服务，这可以大大简化客户的架构、合理分配服务器处理压力。
 
 我们考虑到，在实际的业务场景中，只使用一台Tomcat服务器是完全不够的，需要有一个中间的代理服务器做负载均衡，当用户请求发送给代理服务器，代理服务器就会按需将请求通过内网转发到某一具体Tomcat 服务器中。我们使用Nginx 做反向代理服务器，因为它具有cpu，内存等资源消耗小，启动快，处理静态资源效率高，高并发能力强，并且运行稳定的优点。官方数据是Nginx最高可以支撑50000并发连接。
 
 
 
 #### 配置Nginx
+
+以下是我们如何在本地部署Nginx的步骤。
 
 我们调整了在Nginx 文件中 nginx.conf 配置文件中的一些参数，从而提高性能：
 
@@ -719,8 +731,9 @@ net.core.somaxconn=1024#默认128，连接队列
 net.ipv4.tcp_fin_timeout=10 # timewait的超时时间
 net.ipv4.tcp_tw_reuse=1 #os直接使用timewait的连接
 net.ipv4.tcp_tw_recycle = 0 #回收禁用
-
 ```
+
+
 
 ------
 
@@ -728,19 +741,21 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 #### 四层负载均衡
 
-当我们在项目中使用Nginx作为反向代理后，理论上我们的整个系统已经可以支撑几万的并发连接数。但我们想到，我们需要实现的业务场景是亚马逊电子书的秒杀系统，亚马逊作为一个全球性公司，其用户数量是非常庞大的。我们在阅读亚马逊CEO 贝佐斯写的《致股东的信》当中，贝佐斯提到亚马逊的Prime 会员在全球已经达到两亿人。所以，根据这个数据，我们意识到只运用到Nginx 以及Tomcat 服务集群，应付这个级别的并发还是很有困难的。我们需要使用一种方案，把我们系统的支撑高并发的能力再提高一个层次。
+当我们在项目中使用ALB作为反向代理后，理论上我们的整个系统已经可以支撑大约十万的并发连接数。但我们想到，我们需要实现的业务场景是亚马逊电子书的秒杀系统，亚马逊作为一个全球性公司，其用户数量是非常庞大的。我们在阅读亚马逊CEO 贝佐斯写的《致股东的信》当中，贝佐斯提到亚马逊的Prime 会员在全球已经达到两亿人。所以，根据这个数据，我们意识到只运用到Nginx 以及Tomcat 服务集群，应付这个级别的并发还是很有困难的。我们需要使用一种方案，把我们系统的支撑高并发的能力再提高一个层次。
 
 我们想到运用我们熟悉的LVS技术。LVS是位于网络层第四层，所以它的效率很高。
 
 当用户发出请求后，请求先被发送到由LVS产生的虚拟IP，接着LVS会根据负载均衡算法，把请求转发到我们的server集群上，返回的Response会直接发送给用户。
 
-而我们看到在AWS上不需要我们自己配置LVS，AWS本身提供给我们在OSI第四层的 load balancer。所以我们在我们的账户上 创建了一个Network Load Balancer，并让它连接我们的server 集群。在使用第四层负载均衡后，我们可以建立一个Nginx集群，而每个Nginx 后面又连接着Tomcat集群。
+而我们看到在AWS上不需要我们自己配置LVS，AWS本身提供给我们在OSI第四层的 load balancer。所以我们在我们的账户上 创建了一个Network Load Balancer，并让它连接我们的server 集群。在使用第四层负载均衡后，我们有一个唯一的DNS解析地址，背后连接着我们的server集群。
 
 （图片为AWS提供的第四层 负载均衡器）
 
 ![image-20210421170719488](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210421170719488.png)
 
-因为预算有限的原因，我们只建立了两个EC2 作为我们的Real Server，每个上面都运行着一个Nginx 和两个Tomcat，并且每个Nginx配置两个Tomcat。
+因为预算有限的原因，我们只建立了两个EC2 作为我们的Real Server，每个上面都配置一个Application Load Balancer和两个Tomcat，以及所有的Tomcat 都连接到我们的NLB（Network layer Load Balancer）上面。
+
+![image-20210423233415633](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423233415633.png)
 
 在这样的系统架构之下，在服务器充足的情况下，是可以支持百万级别的并发连接。
 
@@ -748,7 +763,7 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 我们做了几次压力测试，分别测试了原始版本的吞吐量（QPS） 以及优化完最终版本的吞吐量。为了保证实验最基本的变量唯一的方法，我们都将从同一个电脑，同一个ip地址发出Request进行测试。我们的后端Server始终保持是同样的在AWS上运行的EC2实例。但网络原因无法控制，所以数据不是完全准确的。为了减小网络的影响，我们在完成最终版本的时候，保留了最开始版本的代码，和server 配置文件，然后做测试时是在同一个时间段分别进行测试。这样能够尽量减少我们两次数据的其他因素的影响。
 
-### 第一次测试  无优化：
+### 初始测试  无优化：
 
 我们将第一次原始版本没有任何优化的代码部署到我们亚马逊云的Tomcat上之后，我们用jmeter做了一组5000个用户轮回10次的压力测试。这次只测试GET方法，测的具体的是/goods/to_list 页面，调取页面货物信息。
 
@@ -760,25 +775,23 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 
 
-### 二次测试 优化Tomcat：
+### 最终测试 优化完整：
 
-我们在最初测试和最终测试之间增加了一次测试，这次测试是用最原始的代码，但是优化了Tomcat的配置参数，以及使用了APR连接。
+完整优化后，我们为了先是对同样的界面做同样并发量的测试，可以从图上看出，吞吐量（QPS） 是没有优化时的3倍。
 
-这次与第一次测试不同，我们测试的不再是第一次的GET 电子书列表，而是测试Miaosha 这个功能。我们首先生成了5000个用户Token，并设置5000个用户循环十次，访问秒杀功能，最终效果如下：
+![image-20210423234220660](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423234220660.png)
 
-测试配置：
-
-![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/token.png)
-
-![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/token%E9%85%8D%E7%BD%AE.png)
-
-测试结果：
-
-可以看到，吞吐量达到了1110以上，尽管秒杀的操作要比get goods list还要复杂，但是吞吐量确更高了，后续我们不再测试get goods list，我们会测试我们的秒杀功能 连接：/miaosha/do_miaosha。
-
-![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/%E4%BA%8C%E6%AC%A1.%E4%BC%98%E5%8C%96Tomcat.png)
+但我们的架构不光是可以提高吞吐量，在支撑更高的并发连接上也是与之前有提高。但这个特点无法从测试看出，只能从官方提供的理论（包括，Tomcat，Redis，Mysql，ALB和NLB）数据作为根据。
 
 
+
+除此之外，我们还测试了单个的商品页面，因为我们认为在秒杀开始前，大家已经想好买哪个电子书，然后在这个电子书页面不断刷新，所以我们在最终又单独测试了这个页面。下面是结果，可以看到吞吐量到达了3300以上。
+
+![image-20210423234821541](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423234821541.png)
+
+下面是单个电子书的路径。
+
+![image-20210423235006943](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423235006943.png)
 
 ## 其他细节：
 
