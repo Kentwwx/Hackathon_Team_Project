@@ -531,7 +531,7 @@ ALB是应用层负载均衡器，支持HTTP/HTTPS的协议，也支持基于请�
 
 下图中是我们项目用到的负载均衡器，其中红线标出的是我们使用ALB。每个均衡器配置一个Target Group，每个target group 包括两台EC2 实例。
 
-![image-20210423230951657](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423230951657.png)
+![image-20210423230951657](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/ALB.png)
 
 使用应用负载均衡器基于主机名/路径的流量分发特性，客户可以仅用一组应用负载均衡器就可实现将流量路由给多个后端服务，这可以大大简化客户的架构、合理分配服务器处理压力。
 
@@ -755,7 +755,7 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 因为预算有限的原因，我们只建立了两个EC2 作为我们的Real Server，每个上面都配置一个Application Load Balancer和两个Tomcat，以及所有的Tomcat 都连接到我们的NLB（Network layer Load Balancer）上面。
 
-![image-20210423233415633](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423233415633.png)
+![image-20210423233415633](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/NLB.png)
 
 在这样的系统架构之下，在服务器充足的情况下，是可以支持百万级别的并发连接。
 
@@ -779,7 +779,7 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 完整优化后，我们为了先是对同样的界面做同样并发量的测试，可以从图上看出，吞吐量（QPS） 是没有优化时的3倍。
 
-![image-20210423234220660](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423234220660.png)
+![image-20210423234220660](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E6%9C%80%E7%BB%88goodslist.png)
 
 但我们的架构不光是可以提高吞吐量，在支撑更高的并发连接上也是与之前有提高。但这个特点无法从测试看出，只能从官方提供的理论（包括，Tomcat，Redis，Mysql，ALB和NLB）数据作为根据。
 
@@ -787,11 +787,11 @@ net.ipv4.tcp_tw_recycle = 0 #回收禁用
 
 除此之外，我们还测试了单个的商品页面，因为我们认为在秒杀开始前，大家已经想好买哪个电子书，然后在这个电子书页面不断刷新，所以我们在最终又单独测试了这个页面。下面是结果，可以看到吞吐量到达了3300以上。
 
-![image-20210423234821541](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423234821541.png)
+![image-20210423234821541](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E6%9C%80%E7%BB%88.png)
 
 下面是单个电子书的路径。
 
-![image-20210423235006943](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20210423235006943.png)
+![image-20210423235006943](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E8%B7%AF%E5%BE%84.png)
 
 ## 其他细节：
 
