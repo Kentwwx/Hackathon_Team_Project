@@ -1,0 +1,45 @@
+body{
+    font-family:Helvetica, sans-serif;
+    background-position: center center;
+    background-size: cover;
+    background-image: url("../img/background3.jpg");
+}
+
+.row{
+    padding-top: 150px;
+}
+
+.centered {
+    text-align:center;
+    width:25%;
+    margin:25px auto;
+}
+
+.title{
+    color: white;
+    padding-bottom: 30px;
+}
+
+.login-box{
+    background-color: #2d2d2d;
+    border-color: #2d2d2d;
+    opacity: 0.95;
+}
+
+.input-box{
+    padding-bottom: 30px;
+}
+
+.checkbox{
+    text-align:left;
+}
+
+.btn{
+    margin-top: 10px;
+}
+.checkbox{
+    margin-top: 10px;
+}
+.comment{
+    margin-top: 10px;
+}

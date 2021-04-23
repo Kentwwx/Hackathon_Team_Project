@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>商品详情</title>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+		<!-- jquery -->
+		<script type="text/javascript" src="/js/jquery.min.js"></script>
+		<!-- bootstrap -->
+		<link rel="stylesheet" type="text/css" href="/bootstrap/css/bootstrap.min.css" />
+		<script type="text/javascript" src="/bootstrap/js/bootstrap.min.js"></script>
+		<!-- jquery-validator -->
+		<script type="text/javascript" src="/jquery-validation/jquery.validate.min.js"></script>
+		<script type="text/javascript" src="/jquery-validation/localization/messages_zh.min.js"></script>
+		<!-- layer -->
+		<script type="text/javascript" src="/layer/layer.js"></script>
+		<!-- md5.js -->
+		<script type="text/javascript" src="/js/md5.min.js"></script>
+		<!-- common.js -->
+		<script type="text/javascript" src="/js/common.js"></script>
+		<!-- common.js -->
+		<link rel="stylesheet" type="text/css" href="/css/goods_detail.css" />
+	</head>
+<body>
+	<nav class="navbar navbar-inverse">
+		<div class="container">
+			<div class="navbar-header">
+				<a class="navbar-brand" href="/">商城</a>
+			</div>
+			<div class="collapse navbar-collapse">
+				<ul class="nav navbar-nav pull-right">
+					<li><a id="nickName"></a></li>
+					<li id="navTip"></li>
+				</ul>
+			</div>
+		</div>
+	</nav>
+	<div class="container">
+		<div class="row">
+			<hr class="separator"/>
+			<div class="col col-md-3">
+				<img class="book img-responsive" id="goodsImg" />
+			</div>
+			<div class="col col-md-9">
+				<div class="caption-full">
+					<h1><strong><p id="goodsName"></p></strong></h1>
+					<p><strong><span id="goodsAuthor"></span></strong></p>
+					<p><span id="goodsDetail"></span></p>
+					<hr class="separator"/>
+					<div class="block thumbnail">
+						<p><strong>Kindle 价格:</strong></p>
+						<div class="emphasis">
+							<s><span class="block" id="goodsPrice"></span></s>
+							<strong><span id="miaoshaPrice"></span></strong>
+						</div>
+						<p><strong>库存:</strong></p>
+						<div class="emphasis">
+							<span id="stockCount"></span>
+						</div>
+					</div>
+					<hr class="separator"/>
+					<p><strong>秒杀开始时间:</strong></p>
+					<div class="emphasis">
+						<div id="startTime"></div>
+						<div>
+							<input type="hidden" id="remainSeconds" />
+							<span id="miaoshaTip"></span>
+						</div>
+					</div>
+					<div class="form-inline">
+						<img id="verifyCodeImg" width="80" height="32"  style="display:none" onclick="refreshVerifyCode()"/>
+						<input id="verifyCode"  class="form-control" style="display:none"/>
+						<button class="btn btn-primary" type="button" id="buyButton"onclick="getMiaoshaPath()">立即秒杀</button>
+					</div>
+					<input type="hidden" name="goodsId"  id="goodsId" />
+				</div>
+			</div>
+		</div>
+		<hr class="separator"/>
+	</div>
+</body>
+
+	<script>
+
+		function getMiaoshaPath(){
+			var goodsId = $("#goodsId").val();
+			g_showLoading();
+			$.ajax({
+				url:"/miaosha/path",
+				type:"GET",
+				data:{
+					goodsId:goodsId,
+					verifyCode:$("#verifyCode").val()
+				},
+				success:function(data){
+					if(data.code == 0){
+						var path = data.data;
+						doMiaosha(path);
+					}else{
+						layer.msg(data.msg);
+					}
+				},
+				error:function(){
+					layer.msg("客户端请求有误");
+				}
+			});
+		}
+
+		function getMiaoshaResult(goodsId){
+			g_showLoading();
+			$.ajax({
+				url:"/miaosha/result",
+				type:"GET",
+				data:{
+					goodsId:$("#goodsId").val(),
+				},
+				success:function(data){
+					if(data.code == 0){
+						var result = data.data;
+						if(result < 0){
+							layer.msg("对不起，秒杀失败");
+						}else if(result == 0){//继续轮询
+							setTimeout(function(){
+								getMiaoshaResult(goodsId);
+							}, 200);
+						}else{
+							layer.confirm("恭喜你，秒杀成功！查看订单？", {btn:["确定","取消"]},
+									function(){
+										window.location.href="/order_detail.htm?orderId="+result;
+									},
+									function(){
+										layer.closeAll();
+									});
+						}
+					}else{
+						layer.msg(data.msg);
+					}
+				},
+				error:function(){
+					layer.msg("客户端请求有误");
+				}
+			});
+		}
+
+		function doMiaosha(path){
+			$.ajax({
+				url:"/miaosha/"+path+"/do_miaosha",
+				type:"POST",
+				data:{
+					goodsId:$("#goodsId").val()
+				},
+				success:function(data){
+					if(data.code == 0){
+						//window.location.href="/order_detail.htm?orderId="+data.data.id;
+						getMiaoshaResult($("#goodsId").val());
+					}else{
+						layer.msg(data.msg);
+					}
+				},
+				error:function(){
+					layer.msg("客户端请求有误");
+				}
+			});
+
+		}
+
+		function render(detail){
+			var remainSeconds = detail.remainSeconds;
+			var goods = detail.goods;
+			var user = detail.user;
+			$("#goodsName").text(goods.goodsName);
+			$("#goodsImg").attr("src", goods.goodsImg);
+			$("#goodsAuthor").text(goods.goodsAuthor);
+			$("#goodsDetail").text(goods.goodsDetail);
+			$("#startTime").text(new Date(goods.startDate).format("yyyy-MM-dd hh:mm:ss"));
+			$("#remainSeconds").val(remainSeconds);
+			$("#goodsId").val(goods.id);
+			$("#goodsPrice").text(goods.goodsPrice);
+			$("#miaoshaPrice").text(goods.miaoshaPrice);
+			$("#stockCount").text(goods.stockCount);
+			if(user){
+				$("#nickName").text(user.nickname);
+				$("#userTip").hide();
+				$("#navTip").html("<a href=\"/do_logout/\">登出</a>");
+			} else {
+				$("#nickName").hide();
+				$("#navTip").html("<a href=\"/login/to_login/\">登录</a>");
+			}
+			countDown();
+		}
+
+		$(function(){
+			//countDown();
+			getDetail();
+		});
+
+		function getDetail(){
+			var goodsId = g_getQueryString("goodsId");
+			$.ajax({
+				url:"/detail/"+goodsId,
+				type:"GET",
+				success:function(data){
+					if(data.code == 0){
+						render(data.data);
+					}else{
+						layer.msg(data.msg);
+					}
+				},
+				error:function(){
+					layer.msg("客户端请求有误");
+				}
+			});
+		}
+
+		function countDown(){
+			var remainSeconds = $("#remainSeconds").val();
+			var timeout;
+			if(remainSeconds > 0){//秒杀还没开始，倒计时
+				$("#buyButton").attr("disabled", true);
+				$("#miaoshaTip").html("秒杀倒计时："+remainSeconds+"秒");
+				timeout = setTimeout(function(){
+					$("#countDown").text(remainSeconds - 1);
+					$("#remainSeconds").val(remainSeconds - 1);
+					countDown();
+				},1000);
+			}else if(remainSeconds == 0){//秒杀进行中
+				$("#buyButton").attr("disabled", false);
+				if(timeout){
+					clearTimeout(timeout);
+				}
+				$("#miaoshaTip").html("秒杀进行中");
+				$("#verifyCodeImg").attr("src", "/miaosha/verifyCode?goodsId="+$("#goodsId").val());
+				$("#verifyCodeImg").show();
+				$("#verifyCode").show();
+			}else{//秒杀已经结束
+				$("#buyButton").attr("disabled", true);
+				$("#miaoshaTip").html("秒杀已经结束");
+				$("#verifyCodeImg").hide();
+				$("#verifyCode").hide();
+			}
+		}
+		function refreshVerifyCode(){
+			$("#verifyCodeImg").attr("src", "/miaosha/verifyCode?goodsId="+$("#goodsId").val()+"&timestamp="+new Date().getTime());
+		}
+	</script>
+</html>
