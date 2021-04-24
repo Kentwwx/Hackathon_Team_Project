@@ -9,7 +9,7 @@
 
 ## 项目亮点：
 
-**系统架构完整**：使用由Application Load Balancer 集群和Tomcat集群组成的Server集群，并使用由AWS提供的处于OSI第四层网络的Load Balancer。
+**系统架构完整**：Serve集群，并使用由AWS提供的OSI第四层网络的Load Balancer和应用层的负载均衡器。
 
 **中间件**：使用Redis 缓存实现分布式Session，以及页面和热点数据静态化。使用消息队列RabbitMQ削峰填谷。
 
