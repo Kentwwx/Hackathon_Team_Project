@@ -107,7 +107,7 @@ We also have an implementation class in the Service layer is orderService, get t
 
 
 
-The following is the concrete implementation of the two methods.
+The following is the implementation of the two methods.
 
 ```java
 @Service
@@ -116,12 +116,11 @@ public class OrderService {
 	@Autowired
 	OrderDao orderDao;
     
-	//是根据用户id和电子书id获取秒杀订单，如果不存在则返回null。
 	public MiaoshaOrder getMiaoshaOrderByUserIdGoodsId(long userId, long goodsId) {
 		return orderDao.getMiaoshaOrderByUserIdGoodsId(userId, goodsId);
 	}
 	
-    //事务操作，创建订单，如果成功就全成功，如果一个步骤失败则全部回滚
+    //Transactional operation, create order, if successful then all successful, if a step fails then all rolled back
 	@Transactional
 	public OrderInfo createOrder(MiaoshaUser user, GoodsVo goods) {
 		OrderInfo orderInfo = new OrderInfo();
@@ -147,10 +146,9 @@ public class OrderService {
 
 ```
 
-有了这个orderService 我们可以通过用户id和电子书id判断用户是否已经秒杀过了，避免重复秒杀。具体代码如下：
+With this orderService we can determine whether the user has already killed by user id and e-book id, to avoid repeating the second. The specific code is as follows.
 
 ```java
-    	//判断是否已经秒杀到了
     	MiaoshaOrder order = orderService.getMiaoshaOrderByUserIdGoodsId(user.getId(), goodsId);
     	if(order != null) {
     		model.addAttribute("errmsg", CodeMsg.REPEATE_MIAOSHA.getMsg());
@@ -160,13 +158,12 @@ public class OrderService {
 
 
 
-##### 第三部分 减库存，下订单，以及写入秒杀订单：
+##### Part 3 Reducing Inventory, Placing Orders, and Writing Seconds Orders.
 
-除了GoodsService，OrderService我们在业务层还实现了MiaoshaService。在这个类中我们只有一个方法，叫做miaosha，其中包括对一个电子书减少库存，并为当前用户和这个电子书创建一个订单。这个方法也是事务性的。
+In addition to GoodsService, OrderService we also implement MiaoshaService in the business layer. in this class we have only one method, called miaosha, which consists of reducing inventory for an ebook and creating an order for the current user and this ebook. This method is also transactional.
 
 
-
-具体实现如下：
+The implementation is as follows.
 
 ```java
 @Service
@@ -178,7 +175,6 @@ public class MiaoshaService {
     
     @Transactional
 	public OrderInfo miaosha(MiaoshaUser user, GoodsVo goods) {
-		//减库存 下订单 写入秒杀订单
 		goodsService.reduceStock(goods);
 		//order_info maiosha_order
 		return orderService.createOrder(user, goods);
@@ -187,12 +183,10 @@ public class MiaoshaService {
 }
 ```
 
-有了这个方法我们就可以在MiaoshaController中完成最后一步内容：减库存，下订单，以及写入秒杀订单。
+With this method we can complete the last step in the MiaoshaController: reduce the inventory, place the order, and write the second order.
 
-具体实现如下：
-
+The implementation is as follows.
 ```java
-    	//减库存 下订单 写入秒杀订单 
     	OrderInfo orderInfo = miaoshaService.miaosha(user, goods);
     	model.addAttribute("orderInfo", orderInfo);
     	model.addAttribute("goods", goods);
@@ -201,20 +195,18 @@ public class MiaoshaService {
 
 ------
 
-### 第一次优化：
+### First optimization.
 
-在最初版本的基础上加上商品页面缓存，热点数据对象缓存，商品详情静态化，订单详情静态化，静态资源优化；从而减少了对数据库的访问次数。
+Add product page caching, hot data object caching, static product details, static order details, static resource optimization to the initial version; thus reducing the number of accesses to the database.
 
-即使做了页面缓存之后，客户端还是需要从服务端下载页面数据。如果做了页面静态化，客户端可以从redis里缓存页面而不是直接渲染页面，从而加快访问速度。
+Even after page caching, the client still needs to download the page data from the server. If the page is made static, the client can cache the page from redis instead of rendering the page directly, thus speeding up the access speed.
 
-电子书秒杀页面的缓存（目的是为了防止瞬间的用户访问量激增带来的服务器压力过大）：
+Caching of e-book sale promotion pages (the purpose is to prevent excessive pressure on the server caused by an instantaneous surge in user access).
 
 ```java
-//取缓存
-//在GoodsKey类中的getGoodsDetail()方法里，我们设置了缓存的页面有效期，防止缓存时间过长导致的页面的及时性下降
+//In the getGoodsDetail() method of the GoodsKey class, we set the validity period of the cached pages to prevent the timely delivery of the pages due to the long cache time.
 String html = redisService.get(GoodsKey.getGoodsDetail, "" + goodsId, String.class);
 if(!StringUtils.isEmpty(html)) {
-   //如果Redis缓存里有当前页面，则直接在缓存中读取
    return html;
 }
 //手动渲染页面
