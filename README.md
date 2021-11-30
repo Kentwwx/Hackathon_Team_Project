@@ -209,31 +209,24 @@ String html = redisService.get(GoodsKey.getGoodsDetail, "" + goodsId, String.cla
 if(!StringUtils.isEmpty(html)) {
    return html;
 }
-//手动渲染页面
 WebContext ctx = new WebContext(request,response,
                                 request.getServletContext(),request.getLocale(), model.asMap());
 html = thymeleafViewResolver.getTemplateEngine().process("goods_detail", ctx);
 if(!StringUtils.isEmpty(html)) {
-   //渲染页面之后，将渲染过的页面保存到Redis缓存中
 	 redisService.set(GoodsKey.getGoodsDetail, ""+goodsId, html);
 }
 return html;
 ```
-
-对热点数据对象用户"user"的缓存（区别于页面缓存，对象缓存可以等对象自己失效）：
+Caching of the hot data object "user" (as opposed to page caching, where the object cache can wait for the object to expire on its own):
 
 ```java
 public MiaoshaUser getById(long id) {
-   //取Redis缓存
    MiaoshaUser user = redisService.get(MiaoshaUserKey.getById, "" + id, MiaoshaUser.class);
    if(user != null) {
-     	//如果user已经在Redis缓存内，直接返回缓存里的user
       return user;
    }
-   //读取数据库中的user信息
    user = miaoshaUserDao.getById(id);
    if(user != null) {
-      //将user存入Redis缓存内
       redisService.set(MiaoshaUserKey.getById, ""+id, user);
    }
    return user;
@@ -242,57 +235,51 @@ public MiaoshaUser getById(long id) {
 
 ```java
 public boolean updatePassword(String token, long id, String formPass) {
-   //取user
    MiaoshaUser user = getById(id);
    if(user == null) {
       throw new GlobalException(CodeMsg.MOBILE_NOT_EXIST);
    }
-   //更新数据库中user的信息
    MiaoshaUser toBeUpdate = new MiaoshaUser();
    toBeUpdate.setId(id);
    toBeUpdate.setPassword(MD5Util.formPassToDBPass(formPass, user.getSalt()));
    miaoshaUserDao.update(toBeUpdate);
-   //一旦user信息改变，缓存中user的信息也需要改变
+   //Once the user information changes, the user information in the cache also needs to change
    redisService.delete(MiaoshaUserKey.getById, ""+id);
    user.setPassword(toBeUpdate.getPassword());
    redisService.set(MiaoshaUserKey.token, token, user);
-   //密码修改成功
    return true;
 }
 ```
-
-页面静态化（将页面直接缓存到用户的浏览器上，不需要和服务端进行交互）：
+Page statics (caching of pages directly to the user browser, without interaction with the server).
 
 ```html
-<!--在没有进行页面静态化之前，”商品详情“的页面需要通过服务端跳转-->
-<td><a th:href="'/goods/to_detail/'+${goods.id}">详情</a></td>  
+<! -- Before the page is static, the "product details" page needs to be redirected via the server -->
+<td><a th:href="'/goods/to_detail/'+${goods.id}">detail</a></td>  
 ```
 
 ```html
-<!--商品静态化之后，“商品详情”页面直接通过客户端跳转-->
-<td><a th:href="'/goods_detail.htm?goodsId='+${goods.id}">详情</a></td>  
+<! --After product staticization, the "product details" page jumps directly through the client -->
+<td><a th:href="'/goods_detail.htm?goodsId='+${goods.id}">detail</a></td>  
 ```
 
-因为从客户端跳转到“商品详情”页面并将”商品详情“页面做静态化，则页面为HTML和JavaScript混合。详情见src/main/resources/static/goods_detail.htm
+Because we jump to the "product details" page from the client and make the "product details" page static, the page is a mix of HTML and JavaScript. For details, see src/main/resources/static/goods_detail.htm
 
 ------
 
-### 第二次优化：
+### Second optimization.
 
-使用RabbitMQ，以及Redis预减库存
+Using RabbitMQ, and Redis pre-reduced inventory
 
-主要思路：电子书的同步下单转化为异步下单。首先进行秒杀系统的初始化，把可以秒杀的电子书的数量加载到Redis里。当收到秒杀请求的时候，通过Redis预减库存，如果库存不足则直接返回，从而减少对数据库的访问；如果可秒杀的电子书的数量充足，则将用户的秒杀请求放入RabbitMQ的消息队列里面而不是直接访问数据库。然后用户的秒杀订单会请求“出队列”，当客户端收到”出队列“的请求时，客户端会进行轮询，判断是否秒杀成功，服务端会进行生成电子书订单、减少库存等操作。
+Main idea: synchronous order placement for e-books is converted to asynchronous order placement. First initialize the sale promotion system and load the number of promoted eBooks into Redis. When a promotion request is received, the inventory is pre-reduced by Redis and returned directly if the inventory is insufficient, thus reducing access to the database; if the number of promoted eBooks is sufficient, the user's request is put into the RabbitMQ message queue instead of directly accessing the database. Then the user's promotion order will request "out of queue", and when the client receives the request of "out of queue", the client will poll to determine whether the order is successful, and the server will generate ebook orders and reduce inventory.
 
-在代码实现中，运用RabbitMQ中的Direct交换机，使电子书订单进入消息队列。
+In the code implementation, the Direct switch in RabbitMQ is used to make the e-book order enter the message queue.
 
 ```java
-//MiaoshaMessage类中有用户的名字"user"和下单电子书的ID"goodsID"
 MiaoshaMessage mm = new MiaoshaMessage(); 
 mm.setUser(user);
 mm.setGoodsId(goodsId);
-//将该用户的秒杀请求放入消息队列中
 sender.sendMiaoshaMessage(mm);
-return Result.success(0);//排队中
+return Result.success(0);//in the queue list
 ```
 
 ```java
@@ -300,7 +287,6 @@ return Result.success(0);//排队中
 AmqpTemplate amqpTemplate ;
 
 public void sendMiaoshaMessage(MiaoshaMessage mm) {
-   //将接受到的bean对象转化为string
    String msg = RedisService.beanToString(mm);
    log.info("send message:"+msg);
    amqpTemplate.convertAndSend(MQConfig.MIAOSHA_QUEUE, msg);
@@ -311,46 +297,40 @@ public void sendMiaoshaMessage(MiaoshaMessage mm) {
 @RabbitListener(queues=MQConfig.MIAOSHA_QUEUE)
 public void receive(String message) {
    log.info("receive message:"+message);
-   //将收到的信息转化为bean对象
    MiaoshaMessage mm  = RedisService.stringToBean(message, MiaoshaMessage.class);
-   //从bean对象中获取user和可秒杀的电子书id
    MiaoshaUser user = mm.getUser();
    long goodsId = mm.getGoodsId();
-   //获取电子书可被秒杀的数量，如果可秒杀的数量不足则直接跳出
    GoodsVo goods = goodsService.getGoodsVoByGoodsId(goodsId);
    int stock = goods.getStockCount();
    if(stock <= 0) {
       return;
    }
-   //判断是否为重复秒杀，如果为同一用户的重复秒杀，则直接跳出
+   //Determine whether it is a repeat order, if it is a repeat order for the same user, it will directly jump out
    MiaoshaOrder order = orderService.getMiaoshaOrderByUserIdGoodsId(user.getId(), goodsId);
    if(order != null) {
       return;
    }
-   //如果用户成功秒杀电子书，则进行以下操作：减库存 下订单
    miaoshaService.miaosha(user, goods);
 }
 ```
 
 ------
 
-### 第三次优化：
+### Third optimization.
 
-图形验证码以及恶意防刷（接口限流）
+Graphical verification code and malicious brush prevention (interface flow restriction)
 
-验证码的作用：1. 秒杀时大量用户涌入服务端时，分散用户请求。2. 防止用户恶意刷单。
+The purpose of the verification code: 1. to disperse user requests when a large number of users flock to the server during a promotion. 2. to prevent users from malicious swiping.
 
 ```java
 @RequestMapping(value="/verifyCode", method=RequestMethod.GET)
 @ResponseBody
 public Result<String> getMiaoshaVerifyCod(HttpServletResponse response,MiaoshaUser user,
                                           @RequestParam("goodsId")long goodsId) {
-  //如果user不存在，则出error 
   if(user == null) {
       return Result.error(CodeMsg.SESSION_ERROR);
    }
    try {
-      //将验证码写到输出流中
       BufferedImage image = miaoshaService.createVerifyCode(user, goodsId);
       OutputStream out = response.getOutputStream();
       ImageIO.write(image, "JPEG", out);
@@ -364,7 +344,7 @@ public Result<String> getMiaoshaVerifyCod(HttpServletResponse response,MiaoshaUs
 }
 ```
 
-生成随机验证码的方法：
+Method for generating random CAPTCHA.
 
 ```java
 public BufferedImage createVerifyCode(MiaoshaUser user, long goodsId) {
@@ -373,69 +353,60 @@ public BufferedImage createVerifyCode(MiaoshaUser user, long goodsId) {
    }
    int width = 80;
    int height = 32;
-   //创建验证码图像
    BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
    Graphics g = image.getGraphics();
-   //设置背景颜色并填充
    g.setColor(new Color(0xDCDCDC));
    g.fillRect(0, 0, width, height);
-   //设置边界
    g.setColor(Color.black);
    g.drawRect(0, 0, width - 1, height - 1);
-   //生成随机数
    Random rdm = new Random();
-   //在图片上生成50个干扰点
+   //Generate 50 interference points on the image
    for (int i = 0; i < 50; i++) {
       int x = rdm.nextInt(width);
       int y = rdm.nextInt(height);
       g.drawOval(x, y, 0, 0);
    }
-   //生成随机数学公式作为验证码
+   //generate random math question as validation code
    String verifyCode = generateVerifyCode(rdm);
    g.setColor(new Color(0, 100, 0));
    g.setFont(new Font("Candara", Font.BOLD, 24));
    g.drawString(verifyCode, 8, 24);
    g.dispose();
-   //计算验证码中的数学公示并把验证码存到Redis缓存中
+   //store the answer to Redis
    int rnd = calc(verifyCode);
    redisService.set(MiaoshaKey.getMiaoshaVerifyCode, user.getId()+","+goodsId, rnd);
-   //输出验证码图片 
    return image;
 }
 ```
 
-有了生成随机验证码的方法，则需要防止用户恶意刷单。
+With the method of generating random CAPTCHA, it is necessary to prevent users from malicious swiping.
 
 ```java
 public boolean checkVerifyCode(MiaoshaUser user, long goodsId, int verifyCode) {//verifyCode是验证码正确的结果
    if(user == null || goodsId <=0) {
       return false;
    }
-   //从Redis中获取验证码的结果
+   //get the result from Redis
    Integer codeOld = redisService.get(MiaoshaKey.getMiaoshaVerifyCode, user.getId()+","+goodsId, Integer.class);
-   //如果redis中没有当前用户输入的验证码或者当前用户验证码输入错误，则返回拒绝用户进行秒杀 
    if(codeOld == null || codeOld - verifyCode != 0 ) {
       return false;
    }
-   //如果用户没有恶意刷单，则从redis缓存中删除当前用户验证码结果
    redisService.delete(MiaoshaKey.getMiaoshaVerifyCode, user.getId()+","+goodsId);
    return true;
 }
 ```
 
-接口防刷限流（通过Redis缓存限制一段时间内的访问服务端的用户总数），创建类的时候我们extend一个HandlerInterceptorAdapter的一个拦截器；然后实现里面的preHandle()方法，为了在方法执行之前做拦截。以下为preHandle中部分实现拦截的代码：
+The interface is an anti-flush limit (restricting the total number of users accessing the server over a period of time through the Redis cache), and when creating the class we extend a HandlerInterceptorAdapter interceptor; then implement the preHandle() method inside, in order to do the interception before the method is executed. The following is part of the code in preHandle to achieve interception.
 
 ```java
-//设置某段时间-多少秒
 AccessKey ak = AccessKey.withExpire(seconds);
-//获取访问服务端用户的总数
+//Get the total number of users accessing the server
 Integer count = redisService.get(ak, key, Integer.class);
    if(count  == null) {
-   		redisService.set(ak, key, 1);	//通过reedis缓存来实现拦截
+   		redisService.set(ak, key, 1);	
    }else if(count < maxCount) {
       redisService.incr(ak, key);
    }else {
-      //如果超过这段时间内允许的最大用户访问数量，则报错
       render(response, CodeMsg.ACCESS_LIMIT_REACHED);
       return false;
    }
@@ -444,9 +415,7 @@ Integer count = redisService.get(ak, key, Integer.class);
 ```java
 private void render(HttpServletResponse response, CodeMsg cm)throws Exception {
    response.setContentType("application/json;charset=UTF-8");
-   //得到输出流
    OutputStream out = response.getOutputStream();
-   //转化成json string
    String str = JSON.toJSONString(Result.error(cm));
    out.write(str.getBytes("UTF-8"));
    out.flush();
@@ -456,102 +425,101 @@ private void render(HttpServletResponse response, CodeMsg cm)throws Exception {
 
 ------
 
-### 第四次优化：
+### Fourth optimization.
 
-#### Tomact 优化参数及配置
+#### Tomact optimization parameters and configuration
 
-为了提高性能和表现，我们选择对tomcat的配置进行一些优化。
+In order to improve performance and performance, we chose to make some optimizations to tomcat's configuration.
 
-##### 1）内存优化
+##### 1) Memory optimization
 
-我们在Tomcat bin 目录下的 catalina.sh加了一条语句
+We added a statement to catalina.sh in the Tomcat bin directory
 
 ```bash
-JAVA_OPTS="-server -Xms2048M -Xmx2048M  -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=$CATALINA_HOME/logs/heap.dump"
+JAVA_OPTS="-server -Xms2048M -Xmx2048M -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=$CATALINA_HOME/logs/heap.dump"
 ```
 
-这里的 Xms 2048M和 Xmx 2048M是把java 虚拟机的最大内存和最小内存都设置为2G。后面的内容是如果发生OutOfMemeory 则dump出一个内存快照 heap.dump用于对内存进行分析。
+Here Xms 2048M and Xmx 2048M are setting the maximum and minimum memory of the java virtual machine to 2G. what follows is if OutOfMemeory occurs then dump out a snapshot of memory heap.dump is used to analyze the memory.
+
+
+##### 2) HTTP Connector Concurrency Optimization
+
+In addition, we read some of the official Tomcat documentation to see if Tomact had any other room for optimization for high concurrency scenarios like promotion. While reading The HTTP Connector documentation in the webapp/docs/config directory of Tomcat
+Official documentation link: https://tomcat.apache.org/tomcat-8.5-doc/config/http.html
+we identified a few parameters that affect performance and tweaked their initial values. The following four parameters we modified in tomact/conf/server.xml.
+
+1. **maxConnections** The default value for this configuration is 10000, which means that the maximum number of connections supported is 10,000. 2.
+2. **acceptCount** This value defaults to 100, representing the length of the request waiting queue if all threads are occupied.
+3. **maxThreads** This value defaults to 200, representing the maximum number of 200 threads to be created.
+4. **minSpareThreads** This value defaults to 10 because Tomact uses a thread pool. minSpareThreads means that there are at least 10 threads in existence even though there are not many requests.
+
+We have adjusted the above values upwards and have actually improved the performance in the Jmeter stress test, see the stress test section for specific results. After adjusting the above four values, our optimization of the connector is finished.
 
 
 
-##### 2) HTTP Connector 并发优化
+##### 3) Other optimizations
 
-除此之外，我们阅读了Tomcat官方的一些文档，查看Tomact是否有其他对于像秒杀这种高并发场景优化的空间。在阅读Tomcat中的 webapp/docs/config 目录下的 The HTTP Connector 文档时
-官方文档连接：https://tomcat.apache.org/tomcat-8.5-doc/config/http.html
-我们找出来了几个影响性能的参数，并对其初始值进行调整。以下这四个参数我们在 tomact/conf/server.xml 中修改。
+We also read the official Tomcat documentation The Host Container and found some other parameters that affect performance and tweaked them. The official link to the documentation: https://tomcat.apache.org/tomcat-8.5-doc/config/host.html
 
-1. **maxConnections** 这个配置默认值是10000，代表最高支持一万个连接。
-2. **acceptCount** 这个值默认是100，代表在所有线程都被占用的情况下，请求等待队列的长度。
-3. **maxThreads** 这个值默认是200，代表最多有200个线程被创建。
-4. **minSpareThreads**这个值默认是10，因为Tomact是使用了线程池，minSpareThreads的意思是尽管没有很多请求，也最少保持有10个线程存在。
-
-我们对以上分别都调高了，并在Jmeter压力测试中有实际的表现提升，具体测试结果请看压力测试部分。在调整好以上四个值之后，我们对connector的优化就结束了。
+1. **autoDeploy** This value means that Tomact will periodically check if web applications have been updated. The default value is true, which means that it is on. If we don't need this feature in the final deployment phase, it will affect the performance if it is enabled by default, so we change it to false.
+2. **enableLookups ** This value means that if enabled, when request.getRemoteHost() is called, it will first DNS lookup the real host. If disabled, it will skip the DNS lookup and return the ip address directly. In the official documentation, it is explicitly written that if it is turned off, "thereby improving performance" we make it stay off.
+3. **reloadable** This value means that if turned on, Catalina will monitor the classes under /WEB-INF/classes and /WEB-INF/lib and automatically reload the web application if it detects changes. The official documentation immediately describes that this feature is useful during the development phase, but can cause significant runtime overhead. So our final phase is to keep this feature off.
 
 
 
-##### 3）其他优化
+**4) Using the APR protocol**
 
-我们同样是在阅读Tomcat 官方文档 The Host Container 中，发现了其他一些影响性能的参数，并对其进行调整。文档官方链接：https://tomcat.apache.org/tomcat-8.5-doc/config/host.html
+Tomcat supports three types of request processing, BIO, NIO and APR. BIO is synchronous blocking and cannot handle high concurrency scenarios, Nio is buffer based and provides non-blocking IO operations, which has better concurrency performance than BIO. APR, on the other hand, uses Tomcat's Native library, which is an optimization from the OS level and is asynchronous IO, and performs better than the former in highly concurrent scenarios.
 
-1. **autoDeploy** 这个值的意思是Tomact 会周期性的查看 web applications 是否有更新。它的值默认是为true，代表开启状态。如果是在最终部署阶段，我们不需要这个功能，如果默认开启的话会很影响性能，所以我们把它修改为false。
-2. **enableLookups **这个值的意思是，如果开启，当调用 request.getRemoteHost（）时先会DNS 查找真实的host。 而如果关闭则会跳过DNS查询，直接返回ip地址。在官方文档中，明确写道如果关闭，“thereby improving performance” 我们使它是保持关闭状态。
-3. **reloadable** 这个值的意思是如果开启，Catalina会监控在/WEB-INF/classes下和/WEB-INF/lib下的类，如果侦测到改动，则会自动reload the web application。官方文档紧接描述到这个功能在开发阶段很有用，但是会造成significant runtime overhead。 所以我们最后阶段是使这一功能保持关闭。
-
-
-
-**4）使用APR 协议**
-
-Tomcat支持三种请求处理方式，分别是BIO，NIO和APR。BIO是同步阻塞式的，不能处理高并发场景，Nio是基于缓冲区，并能提供非阻塞IO操作，比BIO有着更好的并发性能。而APR使用到Tomcat的Native库，则是一个从操作系统级别进行优化，是异步IO，在高并发场景下，表现优于前者。
-
-在安装apr库后，因为他使用到了tomcat native库，以及一些native methods。jvm 使用到的native 内存会增大，根据我们对jvm的了解，我们认为需要调大Metaspace的空间。和我们对tomcat做的第一项内存优化的方式相同，具体是在catalina.sh 文件，“JAVA_OPTS =” 后面新增 “-XX:MetaspaceSize = 128m" 。
+After installing the apr library, because it uses the tomcat native library and some native methods, the native memory used by jvm increases, and based on our knowledge of jvm, we think we need to increase the Metaspace space. The same way we did the first memory optimization for tomcat, we added "-XX:MetaspaceSize = 128m" to the catalina.sh file after "JAVA_OPTS =".
 
 ------
 
-### 第五次优化：
+### Fifth optimization.
 
-第五次优化我们先在本地开发时使用的Nginx 配置，以及对高并发的参数优化，在后面有详细介绍。一台Nginx 反向代理两台Tomcat。总共有两台Nginx。但在部署在AWS时，我们发现AWS 提供了Application layer Load Balancer（ALB），可以代替Nginx的主要功能，所以在实际部署时我们使用了AWS 提供的ALB。
+The fifth optimization of the Nginx configuration we used for local development first, and the optimization of parameters for high concurrency, is described in detail later. There are two Nginxes in total, but when deployed on AWS, we found that AWS provides an Application layer Load Balancer (ALB) that can replace the main functionality of Nginx, so we used the AWS-provided ALB for the actual deployment.
 
 #### Application Load Balancer
 
-ALB是应用层负载均衡器，支持HTTP/HTTPS的协议，也支持基于请求路径的分发。我们在服务器上增加一个新的Tomcat，原有的EC2上又增加了一个新的EC2服务器，也同样配置了两个Tomcat。现在，我们总共有两个服务器和四个Tomcat。然后我们在AWS做启动Application Load Balancer(ALB)前的准备工作 ，设置我们的两个EC2为我们的目标集群，在注册实例时，我们在每个EC2上启动两个实例，分别在8080和8090端口。然后，我们创建对HTTP/HTTPS负载均衡器，并创建两个监听器，分别监听在8080和8090端口。然后再进行安全配置。最后使用Route53 DNS解析服务，将相应的域名CNAME到该ALB的域名。
+ALB is an application layer load balancer that supports HTTP/HTTPS protocols and also supports request path-based distribution. We add a new Tomcat to the server and a new EC2 server to the existing EC2, and also configure two Tomcat's. Now we have a total of two servers and four Tomcat's. Then we do the preparation work before starting the Application Load Balancer (ALB) in AWS, setting up our When registering instances, we start two instances on each EC2, on ports 8080 and 8090. Then, we create pairs of HTTP/HTTPS load balancers and create two listeners that listen on ports 8080 and 8090 respectively. Then the security configuration is performed. Finally, using Route53 DNS resolution service, the corresponding domain name CNAME to the domain name of this ALB.
 
-下图中是我们项目用到的负载均衡器，其中红线标出的是我们使用ALB。每个均衡器配置一个Target Group，每个target group 包括两台EC2 实例。
+The following figure shows the load balancers used in our project, where the red lines are marked by the ALBs we use. each balancer is configured with a Target Group, and each target group includes two EC2 instances.
 
-![image-20210423230951657](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/ALB.png)
+Each target group contains two EC2 instances. [image-20210423230951657](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/ALB.png)
 
-使用应用负载均衡器基于主机名/路径的流量分发特性，客户可以仅用一组应用负载均衡器就可实现将流量路由给多个后端服务，这可以大大简化客户的架构、合理分配服务器处理压力。
+Using the hostname/path-based traffic distribution feature of application load balancers, customers can use only one set of application load balancers to route traffic to multiple back-end services, which can greatly simplify the customer's architecture and distribute the server processing pressure rationally.
 
-我们在本地部署时用到的是Nginx，在实际项目部署时才用的ALB，以下是我们本地测试时对Nginx的配置
+We use Nginx for local deployments and ALB for actual project deployments, and here's how we configured Nginx for local testing
 
-#### 配置Nginx
+#### Configuring Nginx
 
-以下是我们如何在本地部署Nginx的步骤。
+Here are the steps on how we deployed Nginx locally.
 
-我们调整了在Nginx 文件中 nginx.conf 配置文件中的一些参数，从而提高性能：
+We adjusted some parameters in the nginx.conf configuration file in our Nginx files to improve performance: **1.
 
-**1.并发相关**
+**1. Concurrency-related**
 
 ```bash
-worker_processes 2; #cpu，如果nginx单独在一台机器上
+worker_processes 2; #cpu, if nginx is on a separate machine
 worker_processes auto;
 events {
-    worker_connections 25000;#每一个进程打开的最大连接数，包含了nginx与客户端和nginx与upstream之间的连接
-    multi_accept on; #可以一次建立多个连接
+    worker_connections 25000; #max number of open connections per process, including connections between nginx and client and nginx and upstream
+    multi_accept on; # multiple connections can be established at once
     use epoll;
 }
 ```
 
-我们调整worker_processes参数，因为我们使用的是双核的处理器，我们就把数字改成2。
+We adjust the worker_processes parameter, since we are using a dual-core processor, we change the number to 2.
 
-还有一个参数是 worker_connections 代表每个工作进程，有多少连接数。因为最高支持50000并发，我们选择把这个数字调整到20480。
+Another parameter is worker_connections which represents how many connections each worker process has. Since we support up to 50,000 concurrent connections, we chose to adjust this number to 20480.
 
-而Nginx 当一个工作进程建立一个连接之后，进程将打开一个文件副本，所以最大连接数其实还受到进程最大可打开文件数的限制。
+In Nginx, when a worker establishes a connection, the process will open a copy of the file, so the maximum number of connections is actually limited by the maximum number of files the process can open.
 
 ```bash
-worker_rlimit_nofile 40960; #每个进程打开的最大的文件数=worker_connections*2是安全的，受限于操作系统/etc/security/limits.conf
+worker_rlimit_nofile 40960; #max_files_per-process=worker_connections*2 is safe and limited by the operating system /etc/security/limits.conf
 ```
 
-最大可打开文件数是 “worker_rlimit_nofile” 但这个参数还受限于操作系统，所以我们需要改下 /etc/security/limits.conf 这个文件。
+The maximum number of open files is "worker_rlimit_nofile" but this parameter is also limited by the OS, so we need to change the /etc/security/limits.conf file.
 
 ```bash
 * hard nofile 40960
@@ -562,138 +530,140 @@ worker_rlimit_nofile 40960; #每个进程打开的最大的文件数=worker_conn
 
 
 
-**2.配置长连接**
+**2. Configuring Long Connections**
 
-Nginx 默认是与客户端进行长连接，但与服务器Tomcat是不使用长连接的。如果在操作频繁的场景下，Nginx与Tomcat 服务器集群不使用长连接，会需要经常建立连接，断开连接，这样会有很多资源消耗，以及影响性能。
+Nginx makes long connections to clients by default, but does not use long connections to the server Tomcat. If Nginx does not use long connections with the Tomcat server cluster in a frequent operation scenario, you will need to establish and disconnect connections frequently, which will consume a lot of resources and affect performance.
 
-但对于客户端与Nginx的长连接，我们也调整了下参数，如下（写在nginx.conf文件中的http区域内）：
+However, for long connections between clients and Nginx, we have also adjusted the following parameters (written in the http area of the nginx.conf file).
 
 ```bash
-keepalive_timeout  60s; #长连接的超时时间
-keepalive_requests 200; #200个请求之后就关闭连接
-keepalive_disable msie6; #ie6禁用
+keepalive_timeout 60s; #Timeout for long connections
+keepalive_requests 200; #Close connection after 200 requests
+keepalive_disable msie6; #ie6 disabled
 ```
 
 
 
-对于Nginx 与 upstream server 也就是我们的Tomcat 服务器集群，是默认没有长连接的，所以我们在nginx.conf中的http 区域里面，加上如下配置：
+For Nginx and the upstream server, which is our Tomcat server cluster, there are no long connections by default, so we add the following configuration to the http section of nginx.conf.
 
 ```bash
 upstream server_pool{
         server localhost:8080 weight=1 max_fails=2 fail_timeout=30s;
         server localhost:8081 weight=1 max_fails=2 fail_timeout=30s;
-        keepalive 200;  #200个长连接
+        keepalive 200; #200 long connections
 }
 ```
 
-代表着我们的Tomcat 服务器集群有两台服务器，分别在localhost：8080和localhost：8081。分发给他们请求的权重都是相等的，与他们最多建立两百个长连接。
+This means that our Tomcat server cluster has two servers at localhost:8080 and localhost:8081. the weight distributed to their requests are equal and a maximum of two hundred long connections are established with them.
 
-同时要在server 区域下的location中设置如下：
+Also to be set in the location under the server area as follows.
 
 ```bash
-location /  {
+location / {
             proxy_http_version 1.1;
 	proxy_set_header Upgrade $http_upgrade;
 	proxy_set_header Connection "upgrade";
 }
 ```
 
-因为只有http 1.1 才能使用长连接
+Because only http 1.1 can use long connections
 
 
 
-**3.开启压缩功能**
+**3. Enabling compression**
 
-Nginx 支持压缩功能gzip，具体是服务端压缩信息，浏览器收到解析并解压。压缩过后的信息比原先要小，有效节约带宽，提高响应至客户端的速度。具体配置如下
+Nginx supports gzip, which is a server-side compression of information that the browser receives to parse and decompress. The compressed information is smaller than the original, effectively saving bandwidth and increasing the speed of response to the client. The specific configuration is as follows
 
 ```bash
 gzip on;
 gzip_http_version 1.1;
-gzip_disable "MSIE [1-6]\.(?!.*SV1)"; #ie 1-6禁用
-gzip_proxied any;#从任何代理过来都启用压缩功能
-gzip_types text/plain text/css application/javascript application/x-javascript application/json application/xml application/vnd.ms-fontobject application/x-font-ttf application/svg+xml application/x-icon;#适用类型
+gzip_disable "MSIE [1-6]\. (?!. *SV1)"; #ie 1-6 disabled
+gzip_proxied any;# enable compression from any proxy
+gzip_types text/plain text/css application/javascript application/x-javascript application/json application/xml application/vnd.ms- fontobject application/x-font-ttf application/svg+xml application/x-icon;#Applicable type
 gzip_vary on; #Vary: Accept-Encoding
-gzip_static on; #如果有压缩好的 直接使用
+gzip_static on; #If there is a compressed one, use it directly
 ```
 
 
 
-**4.超时时间**
+**4. Timeout time**
 
 ```bash
-   #超时时间
-    proxy_connect_timeout 5; #连接proxy超时
-    proxy_send_timeout 5; # proxy连接nginx超时
-    proxy_read_timeout 60;# proxy响应超时
+   #Timeout time
+    proxy_connect_timeout 5; # connect proxy timeout
+    proxy_send_timeout 5; # proxy connect nginx timeout
+    proxy_read_timeout 60; # proxy response timeout
 ```
 
 **5.access_log**
 
-打开访问日志，并设置cache缓存提高性能
+Turn on access logging and set cache caching to improve performance
+
+
 
 ```bash
-    access_log  logs/access.log  main;
-    #默认写日志：打开文件写入关闭，max:缓存的文件描述符数量，inactive缓存时间，valid：检查时间间隔，min_uses：在inactive时间段内使用了多少次加入缓存
+    access_log logs/access.log main;
+    # default write logs: open file write off, max:number of file descriptors cached, inactive cache time, valid: check interval, min_uses: how many times the cache was used in the inactive time period to join
     open_log_file_cache max=200 inactive=20s valid=1m min_uses=2;
 ```
 
 
 
-**6.获取用户ip，转发请求给server_pool**
+**6. Get user ip and forward request to server_pool**
 
-我们的Tomcat服务器集群是server_pool，需要在location 配置下，让请求转发给集群：
+Our Tomcat server cluster is server_pool, and we need to configure the location to forward requests to the cluster: ``bash
 
 ```bash
       location / {
-            #长连接
+            #long_connections
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
-            #Tomcat获取真实用户ip
+            #Tomcat get real user ip
             proxy_set_header Host $http_host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $remote_addr;
-            proxy_set_header X-Forwarded-Proto  $scheme;
-            proxy_pass http://server_pool;#请求发送给server_pool
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_pass http://server_pool;# request sent to server_pool
         }
 ```
 
-**7.状态监控**
+**7. Status monitoring**
 
-我们配置了Nginx的状态监控，可以在查看Nginx对连接和请求的状态,这样以后调优，去测试多少连接数比较合适，状态监控可以提供给我们直观的信息
+We have configured Nginx's state monitoring so that you can see the state of Nginx's connections and requests, so that you can later tune it to test how many connections are appropriate, and the state monitoring can provide us with intuitive information
 
 ```bash
-        # 状态监控
+        # Status monitoring
         location /nginx_status {
             stub_status on;
-            access_log   off;
+            access_log off;
 			allow all;
         }
 ```
 
 
 
-**8.配置缓存**
+**8. Configuring caching**
 
-我们需要在Nginx配置缓存，来储存静态文件，如css或者js，这样静态资源都存放在Nginx就足够了,如果请求需要的信息，在Nginx缓存有，则无需把请求转发到服务器集群，直接返回即可，增加系统的表现。开启缓存的部分需要放在nginx.conf的http部分，而情理缓存，静态文件加缓存放在server区域下：
+We need to configure caching in Nginx to store static files, such as css or js, so that static resources are stored in Nginx is sufficient, if the request requires information that is available in the Nginx cache, then there is no need to forward the request to the server cluster, it can be returned directly, increasing the performance of the system. The part that turns on caching needs to be placed in the http section of nginx.conf, while the contextual cache, static files plus cache, is placed under the server area: ``bash
 
 ```bash
-     # 开启缓存,2级目录
+     # Enable cache, level 2 directory
     proxy_cache_path /usr/local/nginx/proxy_cache levels=1:2 keys_zone=cache_one:200m inactive=1d max_size=20g;
     proxy_ignore_headers X-Accel-Expires Expires Cache-Control;
     proxy_hide_header Cache-Control;
     proxy_hide_header Pragma;
   
   
-  #用于清除缓存
-  location ~ /purge(/.*)
+  # for purge cache
+  location ~ /purge(/. *)
   {
   allow all;
   proxy_cache_purge cache_one $host$1$is_args$args;
   }
   
-    # 静态文件加缓存
-    location ~ .*\.(gif|jpg|jpeg|png|bmp|swf|js|css|ico)?$
+    # Static file caching
+    location ~ . *\. (gif|jpg|jpeg|png|bmp|swf|js|css|ico)? $
     {
     expires 1d;
     proxy_cache cache_one;
@@ -705,154 +675,154 @@ gzip_static on; #如果有压缩好的 直接使用
 
 ```
 
-#### 对于操作系统内核的优化
+#### Optimization for OS kernel
 
-我们使用的是AWS linux，在/etc/sysctl.d/ 文件夹下我们创建了一个文件叫 100-sysctl.conf，根据我们对tcp的理解，进行以下内容的配置：
+We are using AWS linux, and under the /etc/sysctl.d/ folder we created a file called 100-sysctl.conf and configured the following according to our understanding of tcp
 
 ```bash
-net.ipv4.tcp_syncookies=1#防止一个套接字在有过多试图连接到达时引起过载
-net.core.somaxconn=1024#默认128，连接队列
-net.ipv4.tcp_fin_timeout=10 # timewait的超时时间
-net.ipv4.tcp_tw_reuse=1 #os直接使用timewait的连接
-net.ipv4.tcp_tw_recycle = 0 #回收禁用
+net.ipv4.tcp_syncookies=1#Prevent a socket from overloading if too many attempted connections arrive
+net.core.somaxconn=1024#default 128, connection queue
+net.ipv4.tcp_fin_timeout=10 # timeout for timewait
+net.ipv4.tcp_tw_reuse=1 #os direct connections using timewait
+net.ipv4.tcp_tw_recycle = 0 # recycle disabled
 ```
 
 
 
 ------
 
-### 第六次优化：
+### Sixth optimization.
 
-#### 四层负载均衡
+#### Four-tier load balancing
 
-当我们在项目中使用ALB作为反向代理后，理论上我们的整个系统已经可以支撑大约十万的并发连接数。但我们想到，我们需要实现的业务场景是亚马逊电子书的秒杀系统，亚马逊作为一个全球性公司，其用户数量是非常庞大的。我们在阅读亚马逊CEO 贝佐斯写的《致股东的信》当中，贝佐斯提到亚马逊的Prime 会员在全球已经达到两亿人。所以，根据这个数据，我们意识到只运用到Nginx 以及Tomcat 服务集群，应付这个级别的并发还是很有困难的。我们需要使用一种方案，把我们系统的支撑高并发的能力再提高一个层次。
+When we used ALB as a reverse proxy in our project, in theory our whole system could already support about 100,000 concurrent connections. However, it occurred to us that the business scenario we needed to implement was a promotion system for Amazon eBooks, and Amazon, as a global company, has a very large number of users. We were reading the "Letter to Shareholders" written by Amazon CEO Bezos, and Bezos mentioned that Amazon's Prime members have reached 200 million people worldwide. So, based on this data, we realized that it would be difficult to handle this level of concurrency using only Nginx and Tomcat service clusters. We needed to use a solution that would increase our system's ability to support high concurrency to another level.
 
-我们想到运用我们熟悉的LVS技术。LVS是位于网络层第四层，所以它的效率很高。
+We came up with the familiar LVS technology, which is located at layer 4 of the network layer and is therefore very efficient.
 
-当用户发出请求后，请求先被发送到由LVS产生的虚拟IP，接着LVS会根据负载均衡算法，把请求转发到我们的server集群上，返回的Response会直接发送给用户。
+When a user makes a request, the request is first sent to a virtual IP generated by LVS, and then LVS forwards the request to our server cluster according to a load balancing algorithm, and the returned Response is sent directly to the user.
 
-而我们看到在AWS上不需要我们自己配置LVS，AWS本身提供给我们在OSI第四层的 load balancer。所以我们在我们的账户上 创建了一个Network Load Balancer，并让它连接我们的server 集群。在使用第四层负载均衡后，我们有一个唯一的DNS解析地址，背后连接着我们的server集群。
+So we created a Network Load Balancer on our account and let it connect to our server cluster. After using Layer 4 load balancing, we have a unique DNS resolution address behind which our server cluster is connected.
 
-（图片为AWS提供的第四层 负载均衡器）
+(Image is the Layer 4 Load Balancer provided by AWS)
 
-![image-20210421170719488](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210421170719488.png)
+! [image-20210421170719488](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210421170719488.png)
 
-因为预算有限的原因，我们只建立了两个EC2 作为我们的Real Server，每个上面都配置一个Application Load Balancer和两个Tomcat，以及所有的Tomcat 都连接到我们的NLB（Network layer Load Balancer）上面。
+Because of budget constraints, we only set up two EC2s as our Real Servers, each with an Application Load Balancer and two Tomcat, and all Tomcat connected to our NLB (Network layer Load Balancer).
 
-![image-20210423233415633](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/NLB.png)
+! [image-20210423233415633](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/NLB.png)
 
-在这样的系统架构之下，在服务器充足的情况下，是可以支持百万级别的并发连接。
+With this system architecture, it is possible to support millions of concurrent connections with sufficient servers.
 
-## 压力测试：
+## Stress testing.
 
-我们做了几次压力测试，分别测试了原始版本的吞吐量（QPS） 以及优化完最终版本的吞吐量。为了保证实验最基本的变量唯一的方法，我们都将从同一个电脑，同一个ip地址发出Request进行测试。我们的后端Server始终保持是同样的在AWS上运行的EC2实例。但网络原因无法控制，所以数据不是完全准确的。为了减小网络的影响，我们在完成最终版本的时候，保留了最开始版本的代码，和server 配置文件，然后做测试时是在同一个时间段分别进行测试。这样能够尽量减少我们两次数据的其他因素的影响。
+We have done several stress tests, testing the throughput (QPS) of the original version and the throughput of the final version after optimization. In order to ensure that the most basic variables of the experiment are unique, we will all send out Requests from the same computer with the same IP address for testing. Our backend Server is always kept as the same EC2 instance running on AWS. However, network reasons are beyond our control, so the data is not completely accurate. In order to reduce the impact of the network, we kept the code and server configuration files from the very first version when we finished the final version, and then did the tests separately at the same time period. This minimizes the impact of other factors on our data twice.
 
-### 初始测试  无优化：
+### Initial testing No optimizations.
 
-我们将第一次原始版本没有任何优化的代码部署到我们亚马逊云的Tomcat上之后，我们用jmeter做了一组5000个用户轮回10次的压力测试。这次只测试GET方法，测的具体的是/goods/to_list 页面，调取页面货物信息。
+After we deployed the first original version of the code without any optimizations to our Amazon Cloud Tomcat, we did a set of stress tests with jmeter for 10 rounds with 5000 users. This time only the GET method was tested, specifically the /goods/to_list page, fetching information about the page's goods.
 
-![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/jmeter%E4%B8%80%E6%AC%A1.png)
+! [image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/jmeter%E4%B8%80%E6%AC%A1.png)
 
-下面是Jmeter 压力测试得出来的聚合报告。因为服务器是在AWS上的美国弗吉尼亚站点，而我们发出的request请求是在中国北方，因为网络原因测试数据会有一些error率（我们在localhost进行多次测试，Error率始终为0），以及因为网络原因QPS，也就是图片中的QPS较低，只有485。
+Here is the aggregated report from the Jmeter stress test. Because the server is on AWS in Virginia, USA, and the request we sent is in Northern China, the test data will have some error rate because of the network (we tested several times on localhost, and the error rate is always 0), and the QPS, that is, the QPS in the image is low because of the network, only 485.
 
-![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6%8D%AE.png)
-
-
-
-### 最终测试 优化完整：
-
-完整优化后，我们为了先是对同样的界面做同样并发量的测试，可以从图上看出，吞吐量（QPS） 是没有优化时的3倍。
-
-![image-20210423234220660](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E6%9C%80%E7%BB%88goodslist.png)
-
-但我们的架构不光是可以提高吞吐量，在支撑更高的并发连接上也是与之前有提高。但这个特点无法从测试看出，只能从官方提供的理论（包括，Tomcat，Redis，Mysql，ALB和NLB）数据作为根据。
+! [image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6% 8D%AE.png)
 
 
 
-除此之外，我们还测试了单个的商品页面，因为我们认为在秒杀开始前，大家已经想好买哪个电子书，然后在这个电子书页面不断刷新，所以我们在最终又单独测试了这个页面。下面是结果，可以看到吞吐量到达了3300以上。
+### Final test Optimization complete.
 
-![image-20210423234821541](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E6%9C%80%E7%BB%88.png)
+After the complete optimization, we tested the same interface in order to first do the same concurrency, and as you can see from the graph, the throughput (QPS) is 3 times higher than without the optimization.
 
-下面是单个电子书的路径。
+! [image-20210423234220660](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E6%9C%80%E7%BB%88goodslist.png)
 
-![image-20210423235006943](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E8%B7%AF%E5%BE%84.png)
+But our architecture does not only improve the throughput, it also improves from before in supporting higher concurrent connections. However, this feature cannot be seen from the tests and can only be based on the data provided by the official theories (including, Tomcat, Redis, Mysql, ALB and NLB).
 
-## 其他细节：
 
-#### 为保护用户数据，使用两次MD5加密
 
-因为数据在网络上是明文传输，如果被劫包，用户的明文密码就会被截取。第一次MD5是用户在输入密码时候之后加上，是为了防止用户密码在网络上明文传输。**方式为：MD5（用户输入+固定salt）**。
+In addition to that, we also tested a single product page, because we thought that people had already figured out which ebook to buy before the promotion started, and then kept refreshing on this ebook page, so we tested this page separately again in the end. Here are the results, you can see that the throughput reached over 3300.
 
-第二次MD5是在载入数据库之前加上，为了防止数据库被盗，有人通过反查表对只进行一次MD5的数据进行破解，所以进行两次MD5双重保险。**方式为：MD5（上次的结果+随机salt）**
+! [image-20210423234821541](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E6% 9C%80%E7%BB%88.png)
 
-```java
+Here is the path to a single ebook.
+
+! [image-20210423235006943](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E8% B7%AF%E5%BE%84.png)
+
+## Additional details.
+
+#### To protect user data, use MD5 encryption twice
+
+Because data is transmitted in clear text over the network, if the packet is hijacked, the user's clear text password will be intercepted. The first MD5 is added after the user enters the password and is to prevent the user's password from being transmitted in plaintext over the network. The **method is: MD5 (user input + fixed salt)**.
+
+The second MD5 is added before loading the database, in order to prevent the database from being stolen and someone cracking the data that is only MD5 once through the anti-lookup table, so two MD5s are performed for double insurance. **Method: MD5 (last result + random salt)**
+
+``` java
 	public static String md5(String src) {
 		return DigestUtils.md5Hex(src);
 	}
-	//固定的盐
+	// fixed salt
 	private static final String salt = "1a2b3c4d";
 
-	//加salt后进行第一次MD5
+	//add salt after the first MD5
 	public static String inputPassToFormPass(String inputPass) {
 		String str = ""+salt.charAt(0)+salt.charAt(2) + inputPass +salt.charAt(5) + salt.charAt(4);
 		System.out.println(str);
 		return md5(str);
 	}
 
-	//载入数据库之前，对数据再加上一个随机的盐，然后进行第二次MD5
+	// Before loading the database, add another random salt to the data, and then a second MD5
 	public static String formPassToDBPass(String formPass, String salt) {
 		String str = ""+salt.charAt(0)+salt.charAt(2) + formPass +salt.charAt(5) + salt.charAt(4);
 		return md5(str);
 	}
 ```
 
-##### **举例：**
+##### **Example:**
 
-用户输入密码为：**123456**
+The user enters a password of:**123456**
 
-在网络传输的是：**d3b1294a61a07da9b49b6e22b2cbd7f9**
+In the network transmission is:**d3b1294a61a07da9b49b6e22b2cbd7f9**
 
-使用随机salt为 "5e6f7g8h" ，则载入数据库的是：**bcb03326aab1575265da58be91b24382**
+Using a random salt of "5e6f7g8h", the database is loaded as:**bcb03326aab1575265da58be91b24382**
 
-用户信息得以保护。
+User information is protected.
 
 ------
 
-#### JSR303校验器
+#### JSR303 Verifier
 
-我门使用JSR303 对用户输入的数据进行校验，并实现了Exception Handler 给用户提示输入错误等信息
+We use JSR303 to check the data entered by the user, and implement the Exception Handler to prompt the user for input errors and other information
 
-用Jsr303 注释 ”**@NotNull**" 进行输入内容非空的检验。并自定义了一个“**@IsMobile**”的注释进行输入检验。
+Jsr303 annotation "**@NotNull**" is used to check that the input is not null. And a custom comment "**@IsMobile**" for input checking.
 
-代码如下：
+The code is as follows.
 
-手机号格式检验：不能为空或者非法手机号格式
+Cell phone number format test: can not be empty or illegal cell phone number format
 
 ```java
 /**
- * 自定义一个 @IsMobile 的手机号码检测注释
- * */
+ * Customize a @IsMobile annotation for mobile number detection
+ */
 @Target({ METHOD, FIELD, ANNOTATION_TYPE, CONSTRUCTOR, PARAMETER })
 @Retention(RUNTIME)
 @Documented
-//使用IsMobileValidator 这个类去做验证
+//Use the class IsMobileValidator to do the validation
 @Constraint(validatedBy = {IsMobileValidator.class })
-public @interface  IsMobile {
+public @interface IsMobile {
 	
 	boolean required() default true;
 	
-	String message() default "手机号码格式错误";
+	String message() default "Wrong format of mobile number";
 
-	Class<?>[] groups() default { };
+	Class<? >[] groups() default { };
 
-	Class<? extends Payload>[] payload() default { };
+	Class<? extends Payload>[] payload() default { }
 }
 ```
 
 ```java
 /**
- * 实现必要的ConstraintValidato 接口
- * */
+ * Implement the necessary ConstraintValidato interfaces
+ */
 public class IsMobileValidator implements ConstraintValidator<IsMobile, String> {
 
 	private boolean required = false;
@@ -863,10 +833,10 @@ public class IsMobileValidator implements ConstraintValidator<IsMobile, String> 
 
 	public boolean isValid(String value, ConstraintValidatorContext context) {
 		if(required) {
-            //调用validatorUtil 类去对手机号码进行校验
+            // Call the validatorUtil class to validate the phone number
 			return ValidatorUtil.isMobile(value);
 		}else {
-			if(StringUtils.isEmpty(value)) {
+			if(StringUtils.isEmpty(value)) { if(StringUtils.isEmpty(value)) {
 				return true;
 			}else {
 				return ValidatorUtil.isMobile(value);
@@ -879,48 +849,48 @@ public class IsMobileValidator implements ConstraintValidator<IsMobile, String> 
 
 ```java
 /**
- * 用于实现对手机号格式的检测
- * */
+ * Used to implement the detection of cell phone number format
+ */
 public class ValidatorUtil {
-	//用regex去判断是否符合手机号码的形式：以1开头的11位数字
-	private static final Pattern mobile_pattern = Pattern.compile("1\\d{10}");
+	// use regex to determine if the mobile number matches the format: 11 digits starting with 1
+	private static final Pattern mobile_pattern = Pattern.compile("1\\\d{10}");
 	
 	public static boolean isMobile(String src) {
-        //判断是否为空
+        // determine if it is empty
 		if(StringUtils.isEmpty(src)) {
 			return false;
 		}
-        //判断是否为手机号码的格式
+        // determine if the format is mobile number
 		Matcher m = mobile_pattern.matcher(src);
 		return m.matches();
 	}
 ```
 
-#### 异常处理
+#### Exception handling
 
-在实现这个注释校验器之后，检测手机号输入格式不再需要各种判断条件，只需要一个简单的 **@IsMobile** 注释就可以了。但是，当输入值没有办法通过校验,则会返回exceptions。 这种Exceptions阅读不友好，所以我们又定义了一个Exception Handler去解决这个问题。
+After implementing this annotation checker, detecting the mobile number input format no longer requires various judgment conditions, just a simple **@IsMobile** annotation. However, when the input value does not pass the check, it will return exceptions. These exceptions are not user-friendly, so we define another Exception Handler to solve this problem.
 
-##### 使用Exception Handler之前：
+##### Before using Exception Handler.
 
-当用户在登录界面输入错误格式的手机号，不会在界面有任何提示，只会在response中返回以下的错误信息，十分的阅读不友好：
+When the user enters the wrong format of cell phone number in the login screen, there will not be any prompt in the interface, only the following error message will be returned in the response, which is very unfriendly to read.
 
 ```json
-{"timestamp":1618815791860,"status":400,"error":"Bad Request","exception":"org.springframework.validation.BindException","errors":[{"codes":["IsMobile.loginVo.mobile","IsMobile.mobile","IsMobile.java.lang.String","IsMobile"],"arguments":[{"codes":["loginVo.mobile","mobile"],"arguments":null,"defaultMessage":"mobile","code":"mobile"},true],"defaultMessage":"手机号码格式错误","objectName":"loginVo","field":"mobile","rejectedValue":"23333332222","bindingFailure":false,"code":"IsMobile"}],"message":"Validation failed for object='loginVo'. Error count: 1","path":"/login/do_login"}
+{"timestamp":1618815791860, "status":400, "error": "Bad Request", "exception": "org.springframework.validation.BindException", "errors":[ {"codes":["IsMobile.loginVo.mobile", "IsMobile.mobile", "IsMobile.java.lang.String", "IsMobile"], "arguments":[{"codes":["loginVo. mobile", "mobile"], "arguments":null, "defaultMessage": "mobile", "code": "mobile"},true], "defaultMessage": "Mobile number format error", "objectName":" loginVo", "field": "mobile", "rejectedValue": "233333332222", "bindingFailure":false, "code": "IsMobile"}], "message": "Validation failed for object='loginVo'. Error count: 1", "path":"/login/do_login"}
 ```
 
 
 
-##### 以下为实现Exception Handler之后：
+##### Following is the implementation of Exception Handler after.
 
-我们在Exception Handler中截取了Exception的信息，并把核心报错内容作为跳窗，提示给用户：
+We intercepted the Exception message in the Exception Handler and prompted the user with the core error report as a pop-up window at.
 
-![image-20210419150910505](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419150910505.png)
+! [image-20210419150910505](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419150910505.png)
 
 
 
-##### 以下为Exception Handler的具体实现：
+##### The following is a concrete implementation of the Exception Handler.
 
-这个类截取了Exception，并返回用我们自己定义的**Result.error** 方法所包装的错误信息，更加简明扼要。
+This class intercepts the Exception and returns the error message wrapped in our own defined **Result.error** method, which is more concise.
 
 ```java
 @ControllerAdvice
@@ -930,12 +900,12 @@ public class GlobalExceptionHandler {
 	public Result<String> exceptionHandler(HttpServletRequest request, Exception e){
 		e.printStackTrace();
         
-        //GlobalException是我们自己定义的Exception 类，包含我们自定义的一些错误message，比如密码错误，手机号不存在等
+        // GlobalException is our own Exception class, containing some of our custom error messages, such as password error, cell phone number does not exist, etc.
 		if(e instanceof GlobalException) {
 			GlobalException ex = (GlobalException)e;
 			return Result.error(ex.getCm());
             
-            //BindException 处理参数校验异常
+            //BindException handles parameter check exceptions
 		}else if(e instanceof BindException) {
 			BindException ex = (BindException)e;
 			List<ObjectError> errors = ex.getAllErrors();
@@ -943,7 +913,7 @@ public class GlobalExceptionHandler {
 			String msg = error.getDefaultMessage();
 			return Result.error(CodeMsg.BIND_ERROR.fillArgs(msg));
 		}else {
-            //其余为服务器异常
+            //the rest are server exceptions
 			return Result.error(CodeMsg.SERVER_ERROR);
 		}
 	}
@@ -952,29 +922,29 @@ public class GlobalExceptionHandler {
 
 ------
 
-#### 配置Redis
+#### Configuring Redis
 
-因为我们要把对象储存在Redis当中，而Redis是key value对应的储存方式，所以我们要做对象的序列化与反序列化。对于对象序列化我们选择的是使用fastJson，因为fastjson查看读起来比较友好。代码中的实现：
+Because we want to store objects in Redis, which is a key value correspondence storage method, we have to do serialization and deserialization of objects. For object serialization we chose to use fastJson, because fastjson is more friendly to view and read. The implementation in the code.
 
 ```java
-	//对象的序列化
+	// Serialization of objects
 	private <T> String beanToString(T value) {
 		if(value == null) {
 			return null;
 		}
-		Class<?> clazz = value.getClass();
+		Class<? > clazz = value.getClass();
 		if(clazz == int.class || clazz == Integer.class) {
 			 return ""+value;
 		}else if(clazz == String.class) {
 			 return (String)value;
-		}else if(clazz == long.class || clazz == Long.class) {
+		}else if(clazz == Long.class || clazz == Long.class) { return "+value; }else if(clazz == Long.class) {
 			return ""+value;
 		}else {
 			return JSON.toJSONString(value);
 		}
 	}
 	
-	//对象的反序列化
+	// Deserialization of objects
 	@SuppressWarnings("unchecked")
 	private <T> T stringToBean(String str, Class<T> clazz) {
 		if(str == null || str.length() <= 0 || clazz == null) {
@@ -985,7 +955,7 @@ public class GlobalExceptionHandler {
 		}else if(clazz == String.class) {
 			 return (T)str;
 		}else if(clazz == long.class || clazz == Long.class) {
-			return  (T)Long.valueOf(str);
+			return (T)Long.valueOf(str);
 		}else {
 			return JSON.toJavaObject(JSON.parseObject(str), clazz);
 		}
@@ -993,13 +963,11 @@ public class GlobalExceptionHandler {
 
 ```
 
-我们通过在一个统一配置文件列出Redis连接池需要的信息，然后再RedisConfig 类中用“@ConfigurationProperties(prefix="redis")” 这个注解，就把配置文件的信息自动导入到Redis连接池中，方便创建。
+By listing the information needed for the Redis connection pool in a unified configuration file, and then using the annotation "@ConfigurationProperties(prefix="redis")" in the RedisConfig class, the configuration file information is automatically The information from the configuration file is automatically imported into the Redis connection pool for easy creation.
 
+After configuring the Redis connection pool, you can store information in Redis, but in the process of using Redis, we found a problem that it is easy to duplicate the name of the Redis key, for example, I store a user's information, the key is id1, but I also store an Amazon eBook's information, the key is also id1. information is replaced. So to solve this problem completely, we designed a set of Redis key prefixes to avoid duplication of keys. The specific structure is as follows.
 
-
-在配置Redis 连接池以后，就可以往Redis里面储存信息了，但在使用过程中我们发现一个问题，Redis的key很容易起名字就重复了，例如我储存user的一个信息，key是id1，但我又储存亚马逊电子书的一个信息，key也是id1。这样的情况就会把user的信息替换掉。所以我们为了彻底解决这个问题，设计了一套Redis key的前缀，避免key的重复。具体结构如下：
-
-##### 接口：KeyPrefix
+##### Interface: KeyPrefix
 
 ```java
 public interface KeyPrefix {
@@ -1012,16 +980,16 @@ public interface KeyPrefix {
 
 ```
 
-##### 实现KeyPrefix的抽象类：BasePrefix
+##### abstract class that implements KeyPrefix: BasePrefix
 
-```java
+``` java
 public abstract class BasePrefix implements KeyPrefix{
 	
 	private int expireSeconds;
 	
 	private String prefix;
 	
-	public BasePrefix(String prefix) {//0代表永不过期
+	public BasePrefix(String prefix) {//0 means never expires
 		this(0, prefix);
 	}
 	
@@ -1030,13 +998,13 @@ public abstract class BasePrefix implements KeyPrefix{
 		this.prefix = prefix;
 	}
 	
-	public int expireSeconds() {//默认0代表永不过期
+	public int expireSeconds() {//Default 0 means never expire
 		return expireSeconds;
 	}
 
 	public String getPrefix() {
 		String className = getClass().getSimpleName();
-		return className+":" + prefix;
+		return className + ":" + prefix;
 	}
 
 }
@@ -1045,11 +1013,11 @@ public abstract class BasePrefix implements KeyPrefix{
 
 
 
-以及我们对代表亚马逊电子书的Goods，代表用户的MiaoshaUser，代表订单的Order，分别继承了BasePrefix 然后实现了各自不同的keyPrefix。具体如下：
+As well, we inherited BasePrefix for Goods representing Amazon eBooks, MiaoshaUser representing Users, and Order representing Orders, and then implemented different keyPrefixes for each. as follows
 
-##### GoodsKey：
+##### GoodsKey.
 
-```java
+``` java
 public class GoodsKey extends BasePrefix{
 
 	private GoodsKey(int expireSeconds, String prefix) {
@@ -1063,7 +1031,7 @@ public class GoodsKey extends BasePrefix{
 
 ##### MiaoshaUserkey:
 
-```java
+``` java
 public class MiaoshaUserKey extends BasePrefix{
 
 	public static final int TOKEN_EXPIRE = 3600*24 * 2;
@@ -1078,7 +1046,7 @@ public class MiaoshaUserKey extends BasePrefix{
 
 ##### OrderKey:
 
-```java
+``` java
 public class OrderKey extends BasePrefix {
 
 	public OrderKey(String prefix) {
@@ -1089,21 +1057,21 @@ public class OrderKey extends BasePrefix {
 
 ```
 
-所以，当我们使用set方法，把信息存入Redis当中，代码实现是这样的：
+So, when we use the set method to store the information in Redis, the code implementation looks like this.
 
-```java
-	public <T> boolean set(KeyPrefix prefix, String key,  T value) {
+``` java
+	public <T> boolean set(KeyPrefix prefix, String key, T value) {
 		 Jedis jedis = null;
 		 try {
-			 jedis =  jedisPool.getResource();
-             //对象序列化
+			 jedis = jedisPool.getResource();
+             // object serialization
 			 String str = beanToString(value);
 			 if(str == null || str.length() <= 0) {
 				 return false;
 			 }
-			//生成真正的key
-			 String realKey  = prefix.getPrefix() + key;
-			 int seconds =  prefix.expireSeconds();
+			//generate the real key
+			 String realKey = prefix.getPrefix() + key;
+			 int seconds = prefix.expireSeconds();
 			 if(seconds <= 0) {
 				 jedis.set(realKey, str);
 			 }else {
@@ -1116,46 +1084,46 @@ public class OrderKey extends BasePrefix {
 	}
 ```
 
-##### 实际例子：
+##### Practical example.
 
-当我们用Redis set，把一个用户id为1的信息储存到Redis当中
+When we use the Redis set, storing a user id of 1 into Redis
 
-```java
-    	MiaoshaUser user  = new MiaoshaUser();
+``` java
+    	MiaoshaUser user = new MiaoshaUser();
     	user.setId(1L);
     	redisService.set(MiaoshaUserKey.getById, ""+1, user);
 ```
 
 
 
-查看Redis的key，发现实际储存的是 "MiaoshaUserKey:id1"。这样就很好的解决了Redis key 冲突的问题了。
+Looking at the Redis key, I see that it is actually stored as "MiaoshaUserKey:id1". This solves the Redis key conflict problem nicely.
 
-![image-20210419234525403](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419234525403.png)
+! [image-20210419234525403](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419234525403.png)
 
 ------
 
-#### 分布式Session
+#### Distributed Session
 
-Session可以记录用户的登录状态，是目前主流网页都会用到的。但如果有多个服务器的时候，某一用户的session只储存在其中一个服务器，但他的请求被转发到了另一服务器，这时他的session就不能被准确获取了。所以我们设计了分布式Session的方法来解决这个问题。具体方式是把用户的session信息都储存在Redis缓存当中，这样每次寻找Session都从共用的这唯一的Redis去查找。
+Sessions record the user's login status, and are used by all major web pages today. But if there are multiple servers, a user's session is stored in only one of them, but his request is forwarded to another server, then his session cannot be accurately retrieved. So we designed the distributed session method to solve this problem. This is done by storing the user's session information in the Redis cache, so that each time we look for a session, we look for it from the only Redis that is shared.
 
-我们首先在User Service类中实现了一个addCookie 方法，代码如下：
+We first implement an addCookie method in the User Service class, with the following code.
 
 ```java
 	private void addCookie(HttpServletResponse response, String token, MiaoshaUser user) {
-        //把token作为key，user的信息作为值存入Redis当中
+        // store token as key and user's information as value in Redis
 		redisService.set(MiaoshaUserKey.token, token, user);
         
-		Cookie cookie = new Cookie(COOKI_NAME_TOKEN, token);
-        //Cookie的expire时间和在redis当中对应的key的expire时间相同
+		cookie cookie = new Cookie(COOKI_NAME_TOKEN, token);
+        //Cookie's expire time is the same as the expire time of the corresponding key in redis
 		cookie.setMaxAge(MiaoshaUserKey.token.expireSeconds());
 		cookie.setPath("/");
-        //把带有token的Cookie加在response当中
+        //add the cookie with the token to the response
 		response.addCookie(cookie);
 	}
 
 ```
 
-addCookie方法在login方法中被调用，随着用户登录，用户拿到带有token的Cookie，下次进入页面时，系统会先从Redis查找有无token，如果有，则返回此用户信息，并刷新Session存在时间。代码如下：
+addCookie method is called in the login method, as the user logs in, the user gets a cookie with a token, and the next time the user enters the page, the system will first find out if there is a token from Redis, and if so, return the user information and refresh the Session existence time. The code is as follows.
 
 ```java
 	public MiaoshaUser getByToken(HttpServletResponse response, String token) {
@@ -1163,30 +1131,29 @@ addCookie方法在login方法中被调用，随着用户登录，用户拿到带
 			return null;
 		}
 		MiaoshaUser user = redisService.get(MiaoshaUserKey.token, token, MiaoshaUser.class);
-		//延长有效期
-		if(user != null) {
+		//extend the validity
+		if(user ! = null) {
 			addCookie(response, token, user);
 		}
 		return user;
 	}
 ```
 
-我们实现了一个Argument Resolver类，并在resolve Argument方法中，做了判断有没有这个用户Session的事情。这样的结构先解析Argument，再传入controller，就可以使不同的页面都有判断Session是否存在的功能，但代码写一遍就够了，就可以使代码更简洁。resolve Argument方法实现如下：
+We implement an Argument Resolver class and do the thing to determine if there is this user Session in the resolve Argument method. Such a structure first resolves the Argument, and then passes it into the controller, so that different pages have the ability to determine whether the Session exists, but the code is written once is enough to make the code more concise. resolve Argument method is implemented as follows.
 
 ```java
 	public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
 			NativeWebRequest webRequest, WebDataBinderFactory binderFactory) throws Exception {
-        //拿到Request和Response
+        //get Request and Response
 		HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
 		HttpServletResponse response = webRequest.getNativeResponse(HttpServletResponse.class);
-		//Token也许存在parameter里，也许存在cookie里
+		//Token may exist in the parameter, or in the cookie
 		String paramToken = request.getParameter(MiaoshaUserService.COOKI_NAME_TOKEN);
 		String cookieToken = getCookieValue(request, MiaoshaUserService.COOKI_NAME_TOKEN);
         
 		if(StringUtils.isEmpty(cookieToken) && StringUtils.isEmpty(paramToken)) {
 			return null;
 		}
-        //如果有token，则返回这个Session的用户信息
 		String token = StringUtils.isEmpty(paramToken)?cookieToken:paramToken;
 		return userService.getByToken(response, token);
 	}
