@@ -17,9 +17,17 @@
 ## Project highlights：
 
 **Complete system architecture**: serve cluster, and use the load balancer of OSI layer 4 network and the load balancer of application layer provided by AWS.
+
+
 **Middleware**: redis cache is used to realize distributed session and static page and hotspot data. Use message queue rabbitmq to cut peak and fill valley.
-**In terms of user data**: use jsr303 verifier to verify the user name, and MD5 twice to protect the user password
+
+
+**In terms of user data**: use jsr303 verifier to verify the user name, and MD5 twice to protect the user password.
+
+
 **Ensure that e-books are not oversold in high concurrency scenarios**: 1. Add a verification code at the front end to prevent users from sending multiple requests at the same time. 2. Hide the seckill address to prevent users from grabbing the web page in advance. 3. In the order table, add a unique index to the user ID and e-book ID to ensure that one user will not generate two orders. 4. Add the judgment of database quantity to the SQL statement of inventory reduction.
+
+
 **Others**: Graphic verification code and interface current limiting and anti brushing, etc.
 
 **系统架构完整**：Serve集群，并使用由AWS提供的OSI第四层网络的Load Balancer和应用层的负载均衡器。
