@@ -25,7 +25,7 @@
 **In terms of user data**: use jsr303 verifier to verify the user name, and MD5 twice to protect the user password.
 
 
-**Ensure that e-books are not oversold in high concurrency scenarios**: 1. Add a verification code at the front end to prevent users from sending multiple requests at the same time. 2. Hide the seckill address to prevent users from grabbing the web page in advance. 3. In the order table, add a unique index to the user ID and e-book ID to ensure that one user will not generate two orders. 4. Add the judgment of database quantity to the SQL statement of inventory reduction.
+**Ensure that e-books are not oversold in high concurrency scenarios**: 1. Add a verification code at the front end to prevent users from sending multiple requests at the same time. 2. Hide the sale promotion address to prevent users from grabbing the web page in advance. 3. In the order table, add a unique index to the user ID and e-book ID to ensure that one user will not generate two orders. 4. Add the judgment of database quantity to the SQL statement of inventory reduction.
 
 
 **Others**: Graphic verification code and interface current limiting and anti brushing, etc.
@@ -42,9 +42,35 @@
 
 ## Project outline：
 
-As a global enterprise, Amazon has a huge user base. Amazon is bound to face extremely high concurrency when it carries out the second kill Kindle e-book activity. In order to meet this demand, we optimized the original ordinary Kindle e-book second kill system six times. Finally, our project reached a system architecture that can theoretically support millions of concurrent connection level connections. Use advanced technical concepts to increase the reliability of the system, improve QPS in high concurrency scenarios, increase user experience, and realize the second kill system close to the actual scenario.
+As a global enterprise, Amazon has a huge user base. Amazon is bound to face extremely high concurrency when it carries out the sale promotion Kindle e-book activity. In order to meet this demand, we optimized the original ordinary Kindle e-book sale promotion system six times. Finally, our project reached a system architecture that can theoretically support millions of concurrent connection level connections. Use advanced technical concepts to increase the reliability of the system, improve QPS in high concurrency scenarios, increase user experience, and realize the sale promotion system close to the actual scenario.
 
 亚马逊作为全球性企业，有着庞大的用户群。亚马逊在进行秒杀Kindle电子书活动时，势必会面临着超高的并发量。我们为了满足这一需求，从最初的普通的Kindle电子书秒杀系统，进行了6次优化，最终，我们的项目达到了理论上可以支撑百万并发连接级别连接的系统架构。运用先进的技术理念，增加系统的可靠性，提高在高并发场景下的QPS，增加用户体验，实现接近实际场景下的秒杀系统。
+
+## Version Description.
+
+### Initial version.
+
+We implemented a usable and complete Amazon Kindle e-book sale promotion system in the initial version overall technically as the overall framework of our project. The drawback of this version is that it does not perform well in actual promotion business scenarios and has a low QPS in high concurrency scenarios. The subsequent six versions are optimized on top of this for the sale promotion scenario. We verified the effect of our optimization by Jmeter stress test.
+
+We implemented three pages, namely the login page, the Amazon eBooks list page, and the spike page.
+
+The user places an order by clicking the spike button on the spike page, the request is sent to the Tomcat server, and according to the logic of our code, the server fetches data from Mysql and returns the page.
+
+#### Initial implementation of the spike function
+
+Our interface is divided into three main interfaces, the login interface, the Amazon eBook interface, and the spike interface. The second-kill function of the second-kill interface is the core part of our project, which is implemented in the control layer of the MiaoshaController class.
+
+In summary, there are three parts to performing a spike.
+
+<u>First, determine the inventory;</u> and
+
+<u>Second, determine if the spike has already been made;</u
+
+<u>Third, decreasing the inventory, placing the order, and writing the spike order. </u
+
+Here is the implementation of the three parts
+
+Translated with www.DeepL.com/Translator (free version)
 
 ## 版本介绍：
 
