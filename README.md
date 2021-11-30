@@ -7,13 +7,6 @@
 5. Use Tomcat server cluster and application layer load balancer provided by AWS.
 6. In addition, the load balancer in the fourth layer of the network layer is used to realize the server cluster composed of nginx cluster and Tomcat cluster.
 
-1. 前端使用 HTML，CSS，JQuery以及Thymeleaf，Bootstrap技术框架。
-2. 后端使用SpringBoot 搭建项目，JSR303 做校验器，MyBatis持久层框架。
-3. 中间件使用了消息队列RabbitMQ进行异步下单；使用Redis进行资源缓存以及实现分布式Session；Druid连接池。
-4. 使用关系型数据库MySQL。
-5. 使用Tomcat服务器集群以及AWS提供的Application layer Load Balancer。
-6. 此外还使用了处于网络层第四层的Load Balancer，实现了由Nginx 集群+Tomcat集群组成的Server集群。
-
 ## Project highlights：
 
 **Complete system architecture**: serve cluster, and use the load balancer of OSI layer 4 network and the load balancer of application layer provided by AWS.
@@ -30,21 +23,10 @@
 
 **Others**: Graphic verification code and interface current limiting and anti brushing, etc.
 
-**系统架构完整**：Serve集群，并使用由AWS提供的OSI第四层网络的Load Balancer和应用层的负载均衡器。
-
-**中间件**：使用Redis 缓存实现分布式Session，以及页面和热点数据静态化。使用消息队列RabbitMQ削峰填谷。
-
-**用户数据方面**：使用JSR303校验器对用户名进行检验，两次MD5对用户密码进行保护
-
-**高并发场景下保证电子书不超卖**：1.前端加验证码，防止用户同时发出多个请求。2.隐藏秒杀地址，防止用户提前抓取网页。3.在订单表中，对用户id和电子书id加唯一索引，确保一个用户不会生成两个订单。4.在减库存的sql 语句加上对数据库数量的判断。
-
-**其他**：图形验证码以及接口限流防刷等。
-
 ## Project outline：
 
 As a global enterprise, Amazon has a huge user base. Amazon is bound to face extremely high concurrency when it carries out the sale promotion Kindle e-book activity. In order to meet this demand, we optimized the original ordinary Kindle e-book sale promotion system six times. Finally, our project reached a system architecture that can theoretically support millions of concurrent connection level connections. Use advanced technical concepts to increase the reliability of the system, improve QPS in high concurrency scenarios, increase user experience, and realize the sale promotion system close to the actual scenario.
 
-亚马逊作为全球性企业，有着庞大的用户群。亚马逊在进行秒杀Kindle电子书活动时，势必会面临着超高的并发量。我们为了满足这一需求，从最初的普通的Kindle电子书秒杀系统，进行了6次优化，最终，我们的项目达到了理论上可以支撑百万并发连接级别连接的系统架构。运用先进的技术理念，增加系统的可靠性，提高在高并发场景下的QPS，增加用户体验，实现接近实际场景下的秒杀系统。
 
 ## Version Description.
 
@@ -52,78 +34,41 @@ As a global enterprise, Amazon has a huge user base. Amazon is bound to face ext
 
 We implemented a usable and complete Amazon Kindle e-book sale promotion system in the initial version overall technically as the overall framework of our project. The drawback of this version is that it does not perform well in actual promotion business scenarios and has a low QPS in high concurrency scenarios. The subsequent six versions are optimized on top of this for the sale promotion scenario. We verified the effect of our optimization by Jmeter stress test.
 
-We implemented three pages, namely the login page, the Amazon eBooks list page, and the spike page.
+We implemented three pages, namely the login page, the Amazon eBooks list page, and the sale promotion page.
 
-The user places an order by clicking the spike button on the spike page, the request is sent to the Tomcat server, and according to the logic of our code, the server fetches data from Mysql and returns the page.
+The user places an order by clicking the promotion button on the sale promotion page, the request is sent to the Tomcat server, and according to the logic of our code, the server fetches data from Mysql and returns the page.
 
-#### Initial implementation of the spike function
+#### Initial implementation of the sale promotion functionality
 
-Our interface is divided into three main interfaces, the login interface, the Amazon eBook interface, and the spike interface. The second-kill function of the second-kill interface is the core part of our project, which is implemented in the control layer of the MiaoshaController class.
+Our interface is divided into three main interfaces, the login interface, the Amazon eBook interface, and the sale promotion interface. The sale promotion function of the sale promotion interface is the core part of our project, which is implemented in the control layer of the MiaoshaController class.
 
-In summary, there are three parts to performing a spike.
+In summary, there are three parts to performing a promotion.
 
 <u>First, determine the inventory;</u> and
 
-<u>Second, determine if the spike has already been made;</u
+<u>Second, determine if the promotion has already been made;</u
 
-<u>Third, decreasing the inventory, placing the order, and writing the spike order. </u
+<u>Third, decreasing the inventory, placing the order, and writing the promotion order. </u
 
 Here is the implementation of the three parts
 
-Translated with www.DeepL.com/Translator (free version)
-
-## 版本介绍：
-
-### 最初版本：
-
-我们在最初的版本总体技术上实现了一个可用且完整的亚马逊Kindle 电子书秒杀系统，作为我们项目的整体框架。此版本缺点是在实际秒杀业务场景表现不好，在高并发场景下，QPS较低。后续6个版本都是在此之上进行针对秒杀场景的优化。我们通过Jmeter压力测试，验证我们的优化效果。
-
-我们实现了三个页面，分别是登录页面，亚马逊电子书列表页面，以及秒杀页面。
-
-用户通过在秒杀页面点击秒杀按钮下订单，request发送到Tomcat 服务器，根据我们代码的逻辑，服务器从Mysql取数据，返回页面。
-
-#### 秒杀功能的初步实现
-
-我们的界面主要分为三个，登录界面，亚马逊电子书界面，以及秒杀界面。秒杀界面的秒杀功能是我们项目的核心部分，具体内容我们在控制层的实现类 MiaoshaController 实现。
-
-概况的讲，执行一次秒杀需要完成三部分：
-
-<u>第一，判断库存；</u>
-
-<u>第二，判断是否已经秒杀过了；</u>
-
-<u>第三，减库存 下订单 以及写入秒杀订单。</u>
-
-下面是三个部分的实现
-
-##### 第一部分 判断库存：
-
-我们在业务层实现了一个GoodsService类，里面用依赖注入，注入了Dao层中的goodsDao，调用Dao层的方法我们可以从我们的Mysql数据库获取数据。GoodsService实现了三个方法：
-
-
-
-1.列出所有亚马逊电子书        2. 通过Id 获取一个电子书        3. 减少某一个电子书的库存
-
-
-
-以下是代码实现：
 
 ```java
 public class GoodsService {
 	
-    //注入Dao层
+    //Dao layer injection
 	@Autowired
 	GoodsDao goodsDao;
 	
-    //列出所有亚马逊电子书
+    //list all amazon books
 	public List<GoodsVo> listGoodsVo(){
 		return goodsDao.listGoodsVo();
 	}
-	//通过Id 获取一个电子书. 返回的GoodsVo是一个电子书的具体信息
+	//get a specific information of a book
 	public GoodsVo getGoodsVoByGoodsId(long goodsId) {
 		return goodsDao.getGoodsVoByGoodsId(goodsId);
 	}
-	//减少某一个电子书的库存
+	//reduce the stock ofa book
 	public void reduceStock(GoodsVo goods) {
 		MiaoshaGoods g = new MiaoshaGoods();
 		g.setGoodsId(goods.getId());
@@ -134,12 +79,12 @@ public class GoodsService {
 }
 ```
 
-有了这个goodsService，我们可以通过id调取具体的某一个电子书，然后获取它的库存信息，判断是否有库存
+With this goodsService, we can retrieve a specific e-book by its id, and then get its inventory information to determine whether it is in stock or not
 
-实现如下：
+The implementation is as follows.
 
 ```java
-    	//判断库存
+    
     	GoodsVo goods = goodsService.getGoodsVoByGoodsId(goodsId);
     	int stock = goods.getStockCount();
     	if(stock <= 0) {
@@ -150,19 +95,19 @@ public class GoodsService {
 
 
 
-##### 第二部分 判断是否已经秒杀过了：
+##### Part II Determining whether a second has been.
 
-我们同样在Service层还有一个实现类是orderService，获取数据同样是通过Dao层的方法调取Mysql的数据。orderService 类中有两个方法：
-
-
-
-1.是根据用户id和电子书id获取秒杀订单，如果不存在则返回null。
-
-2.是为一个用户和一个电子书创建一个秒杀订单。因为在创建订单过程，不止有一个步骤，但这些步骤需要是如果全部成功就成功，如果一个步骤失败，则所有步骤都需要回到开始之前的状态。因为我们使用的是Mysql数据库，而Mysql支持事务操作，所以我们用到 “@Transactional”这个注释，使得创建订单变成了一个事务操作。
+We also have an implementation class in the Service layer is orderService, get the data is also through the Dao layer methods to call Mysql data. orderService class has two methods.
 
 
 
-以下是两个方法的具体实现：
+1. is based on the user id and e-book id to get the second order, if not exist then return null.
+
+2. is to create a second order for a user and an e-book. Because in the process of creating an order, there is more than one step, but these steps need to be successful if all of them succeed, and if one step fails, then all steps need to go back to the state before they started. Because we are using a Mysql database, and Mysql supports transactional operations, we use the "@Transactional" annotation to make creating an order a transactional operation.
+
+
+
+The following is the concrete implementation of the two methods.
 
 ```java
 @Service
