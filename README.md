@@ -1,4 +1,11 @@
-## 技术栈：
+## Technical stack：
+
+1. The front end uses HTML, CSS, jQuery, thymeleaf and bootstrap technical frameworks.
+2. The backend uses springboot to build the project, jsr303 as the verifier, and mybatis persistence layer framework.
+3. The middleware uses message queue rabbitmq for asynchronous ordering; Redis is used for resource caching and distributed session; Druid connection pool.
+4. Use relational database mysql.
+5. Use Tomcat server cluster and application layer load balancer provided by AWS.
+6. In addition, the load balancer in the fourth layer of the network layer is used to realize the server cluster composed of nginx cluster and Tomcat cluster.
 
 1. 前端使用 HTML，CSS，JQuery以及Thymeleaf，Bootstrap技术框架。
 2. 后端使用SpringBoot 搭建项目，JSR303 做校验器，MyBatis持久层框架。
@@ -7,7 +14,13 @@
 5. 使用Tomcat服务器集群以及AWS提供的Application layer Load Balancer。
 6. 此外还使用了处于网络层第四层的Load Balancer，实现了由Nginx 集群+Tomcat集群组成的Server集群。
 
-## 项目亮点：
+## Project highlights：
+
+**Complete system architecture **: serve cluster, and use the load balancer of OSI layer 4 network and the load balancer of application layer provided by AWS.
+**Middleware **: redis cache is used to realize distributed session and static page and hotspot data. Use message queue rabbitmq to cut peak and fill valley.
+**In terms of user data **: use jsr303 verifier to verify the user name, and MD5 twice to protect the user password
+**Ensure that e-books are not oversold in high concurrency scenarios **: 1. Add a verification code at the front end to prevent users from sending multiple requests at the same time. 2. Hide the seckill address to prevent users from grabbing the web page in advance. 3. In the order table, add a unique index to the user ID and e-book ID to ensure that one user will not generate two orders. 4. Add the judgment of database quantity to the SQL statement of inventory reduction.
+**Others **: Graphic verification code and interface current limiting and anti brushing, etc.
 
 **系统架构完整**：Serve集群，并使用由AWS提供的OSI第四层网络的Load Balancer和应用层的负载均衡器。
 
@@ -19,7 +32,9 @@
 
 **其他**：图形验证码以及接口限流防刷等。
 
-## 项目概述：
+## project outline：
+
+As a global enterprise, Amazon has a huge user base. Amazon is bound to face extremely high concurrency when it carries out the second kill Kindle e-book activity. In order to meet this demand, we optimized the original ordinary Kindle e-book second kill system six times. Finally, our project reached a system architecture that can theoretically support millions of concurrent connection level connections. Use advanced technical concepts to increase the reliability of the system, improve QPS in high concurrency scenarios, increase user experience, and realize the second kill system close to the actual scenario.
 
 亚马逊作为全球性企业，有着庞大的用户群。亚马逊在进行秒杀Kindle电子书活动时，势必会面临着超高的并发量。我们为了满足这一需求，从最初的普通的Kindle电子书秒杀系统，进行了6次优化，最终，我们的项目达到了理论上可以支撑百万并发连接级别连接的系统架构。运用先进的技术理念，增加系统的可靠性，提高在高并发场景下的QPS，增加用户体验，实现接近实际场景下的秒杀系统。
 
