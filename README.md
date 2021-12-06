@@ -1,3 +1,7 @@
+## 2021 Spring Amazon Hackathon Championship Team. 
+# Team Leader: Weixiang Wang. Members: Ziqi Zhang, Kun Zhou.
+
+
 ## Technical stack：
 
 1. The front end uses HTML, CSS, jQuery, thymeleaf and bootstrap technical frameworks.
