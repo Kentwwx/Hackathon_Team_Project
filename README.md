@@ -1,4 +1,4 @@
-# 2021 Spring Amazon China Hackathon Championship Team. 
+# 2021 Spring Amazon (China) Hackathon Championship Team. 
 ### Team Leader: Weixiang Wang. Members: Ziqi Zhang, Kun Zhou.
 
 
