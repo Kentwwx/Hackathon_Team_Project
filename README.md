@@ -1,5 +1,5 @@
-## 2021 Spring Amazon Hackathon Championship Team. 
-# Team Leader: Weixiang Wang. Members: Ziqi Zhang, Kun Zhou.
+# 2021 Spring Amazon Hackathon Championship Team. 
+### Team Leader: Weixiang Wang. Members: Ziqi Zhang, Kun Zhou.
 
 
 ## Technical stack：
