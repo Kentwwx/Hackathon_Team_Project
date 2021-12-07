@@ -6,7 +6,7 @@
 
 1. The front end uses HTML, CSS, jQuery, thymeleaf and bootstrap technical frameworks.
 2. The backend uses springboot to build the project, jsr303 as the verifier, and mybatis persistence layer framework.
-3. The middleware uses message queue rabbitmq for asynchronous ordering; Redis is used for resource caching and distributed session; Druid connection pool.
+3. The middleware uses message queue RabbitMQ for asynchronous ordering; Redis is used for resource caching and distributed session; Druid connection pool.
 4. Use relational database mysql.
 5. Use Tomcat server cluster and application layer load balancer provided by AWS.
 6. In addition, the load balancer in the fourth layer of the network layer is used to realize the server cluster composed of nginx cluster and Tomcat cluster.
