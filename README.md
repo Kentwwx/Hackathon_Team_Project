@@ -729,7 +729,7 @@ After we deployed the first original version of the code without any optimizatio
 
 Here is the aggregated report from the Jmeter stress test. Because the server is on AWS in Virginia, USA, and the request we sent is in Northern China, the test data will have some error rate because of the network (we tested several times on localhost, and the error rate is always 0), and the QPS, that is, the QPS in the image is low because of the network, only 485.
 
-![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6% 8D%AE.png)
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6%8D%AE.png)
 
 
 
@@ -745,11 +745,11 @@ But our architecture does not only improve the throughput, it also improves from
 
 In addition to that, we also tested a single product page, because we thought that people had already figured out which ebook to buy before the promotion started, and then kept refreshing on this ebook page, so we tested this page separately again in the end. Here are the results, you can see that the throughput reached over 3300.
 
-![image-20210423234821541](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E6% 9C%80%E7%BB%88.png)
+![image-20210423234821541](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E6%9C%80%E7%BB%88.png)
 
 Here is the path to a single ebook.
 
-![image-20210423235006943](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E8% B7%AF%E5%BE%84.png)
+![image-20210423235006943](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E8%B7%AF%E5%BE%84.png)
 
 ## Additional details.
 
