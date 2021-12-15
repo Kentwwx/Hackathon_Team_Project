@@ -709,11 +709,11 @@ So we created a Network Load Balancer on our account and let it connect to our s
 
 (Image is the Layer 4 Load Balancer provided by AWS)
 
-! [image-20210421170719488](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210421170719488.png)
+![image-20210421170719488](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210421170719488.png)
 
 Because of budget constraints, we only set up two EC2s as our Real Servers, each with an Application Load Balancer and two Tomcat, and all Tomcat connected to our NLB (Network layer Load Balancer).
 
-! [image-20210423233415633](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/NLB.png)
+![image-20210423233415633](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/NLB.png)
 
 With this system architecture, it is possible to support millions of concurrent connections with sufficient servers.
 
@@ -725,11 +725,11 @@ We have done several stress tests, testing the throughput (QPS) of the original 
 
 After we deployed the first original version of the code without any optimizations to our Amazon Cloud Tomcat, we did a set of stress tests with jmeter for 10 rounds with 5000 users. This time only the GET method was tested, specifically the /goods/to_list page, fetching information about the page's goods.
 
-! [image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/jmeter%E4%B8%80%E6%AC%A1.png)
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/jmeter%E4%B8%80%E6%AC%A1.png)
 
 Here is the aggregated report from the Jmeter stress test. Because the server is on AWS in Virginia, USA, and the request we sent is in Northern China, the test data will have some error rate because of the network (we tested several times on localhost, and the error rate is always 0), and the QPS, that is, the QPS in the image is low because of the network, only 485.
 
-! [image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6% 8D%AE.png)
+![image-20210422183835805](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/Jmeter%E4%B8%80%E6%AC%A1%E6%95%B0%E6% 8D%AE.png)
 
 
 
@@ -737,7 +737,7 @@ Here is the aggregated report from the Jmeter stress test. Because the server is
 
 After the complete optimization, we tested the same interface in order to first do the same concurrency, and as you can see from the graph, the throughput (QPS) is 3 times higher than without the optimization.
 
-! [image-20210423234220660](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E6%9C%80%E7%BB%88goodslist.png)
+![image-20210423234220660](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E6%9C%80%E7%BB%88goodslist.png)
 
 But our architecture does not only improve the throughput, it also improves from before in supporting higher concurrent connections. However, this feature cannot be seen from the tests and can only be based on the data provided by the official theories (including, Tomcat, Redis, Mysql, ALB and NLB).
 
@@ -745,11 +745,11 @@ But our architecture does not only improve the throughput, it also improves from
 
 In addition to that, we also tested a single product page, because we thought that people had already figured out which ebook to buy before the promotion started, and then kept refreshing on this ebook page, so we tested this page separately again in the end. Here are the results, you can see that the throughput reached over 3300.
 
-! [image-20210423234821541](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E6% 9C%80%E7%BB%88.png)
+![image-20210423234821541](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E6% 9C%80%E7%BB%88.png)
 
 Here is the path to a single ebook.
 
-! [image-20210423235006943](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E8% B7%AF%E5%BE%84.png)
+![image-20210423235006943](https://github.com/Kentwwx/Hackathon_Team_Project/blob/main/Img/%E5%8D%95%E4%B8%AA%E5%95%86%E5%93%81%E8% B7%AF%E5%BE%84.png)
 
 ## Additional details.
 
@@ -888,7 +888,7 @@ When the user enters the wrong format of cell phone number in the login screen, 
 
 We intercepted the Exception message in the Exception Handler and prompted the user with the core error report as a pop-up window at.
 
-! [image-20210419150910505](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419150910505.png)
+![image-20210419150910505](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419150910505.png)
 
 
 
