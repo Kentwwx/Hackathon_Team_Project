@@ -1102,7 +1102,7 @@ When we use the Redis set, storing a user id of 1 into Redis
 
 Looking at the Redis key, I see that it is actually stored as "MiaoshaUserKey:id1". This solves the Redis key conflict problem nicely.
 
-! [image-20210419234525403](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419234525403.png)
+![image-20210419234525403](https://github.com/Kentwwx/Hackathon_Team_Project/blob/develop/Img/image-20210419234525403.png)
 
 ------
 
